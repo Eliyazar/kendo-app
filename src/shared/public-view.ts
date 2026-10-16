@@ -33,6 +33,8 @@ export interface PublicMatch {
   winner: Side | null
   /** Team bouts: position name, e.g. "Senpo". */
   positionLabel: string | null
+  /** Where this match sits in the tournament, e.g. "Pool A", "Semi-final", "Tie-breaker". */
+  label: string
 }
 
 export interface PublicMatchup {
@@ -47,7 +49,7 @@ export interface PublicView {
   nextMatch: PublicMatchup | null
 }
 
-function identify(t: Tournament, c: Competitor): { name: string; dojo: string } {
+export function describeCompetitor(t: Tournament, c: Competitor): { name: string; dojo: string } {
   const player = c.playerId ? t.players[c.playerId] : undefined
   if (player) return { name: player.name, dojo: player.dojo }
   const team = c.teamId ? t.teams[c.teamId] : undefined
@@ -84,13 +86,24 @@ function teamScore(t: Tournament, m: Match): PublicTeamScore | null {
   return s
 }
 
+const ROUND_NAMES = ['Final', 'Semi-final', 'Quarter-final']
+
+export function matchLabel(t: Tournament, m: Match): string {
+  if (m.kind === 'tie-breaker') return 'Tie-breaker'
+  if (m.kind === 'pool') return t.pools.find((p) => p.id === m.poolId)?.name ?? 'Pool'
+  const node = m.bracketNodeId && t.bracket ? t.bracket.nodes[m.bracketNodeId] : undefined
+  if (!node || !t.bracket) return 'Elimination'
+  const fromFinal = t.bracket.rounds - 1 - node.round
+  return ROUND_NAMES[fromFinal] ?? `Round of ${2 ** (fromFinal + 1)}`
+}
+
 export function toPublicView(state: AppState): PublicView {
   const t = state.tournament
   if (!t) return { tournamentName: null, match: null, team: null, nextMatch: null }
 
   const m = t.activeMatchId ? t.matches[t.activeMatchId] : undefined
   const next = nextScheduledMatch(t)
-  const nextMatch = next ? { aka: identify(t, next.aka), shiro: identify(t, next.shiro) } : null
+  const nextMatch = next ? { aka: describeCompetitor(t, next.aka), shiro: describeCompetitor(t, next.shiro) } : null
   if (!m) return { tournamentName: t.name, match: null, team: null, nextMatch }
 
   const score = computeScore(m.events)
@@ -101,12 +114,13 @@ export function toPublicView(state: AppState): PublicView {
     match: {
       id: m.id,
       status: m.status,
-      aka: { ...identify(t, m.aka), ...score.aka },
-      shiro: { ...identify(t, m.shiro), ...score.shiro },
+      aka: { ...describeCompetitor(t, m.aka), ...score.aka },
+      shiro: { ...describeCompetitor(t, m.shiro), ...score.shiro },
       encho: m.encho,
       timeUp: m.endReason === 'time-up',
       winner: over ? pendingResult(m).winner : null,
-      positionLabel: teamSize && m.position !== undefined ? (TEAM_POSITIONS[teamSize][m.position] ?? null) : null
+      positionLabel: teamSize && m.position !== undefined ? (TEAM_POSITIONS[teamSize][m.position] ?? null) : null,
+      label: matchLabel(t, m)
     },
     team: teamScore(t, m),
     nextMatch
