@@ -3,6 +3,7 @@
   "productName": "Kendo Tournament Manager",
   "version": "0.1.0",
   "description": "Offline-first desktop app for running Kendo tournaments with an admin panel and a public scoreboard.",
+  "author": "Eliyazar",
   "main": "./out/main/index.js",
   "private": true,
   "scripts": {
@@ -11,7 +12,11 @@
     "preview": "electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "test": "vitest run",
-    "postinstall": "install-electron"
+    "postinstall": "install-electron",
+    "dist": "npm run build && electron-builder",
+    "dist:win": "npm run build && electron-builder --win",
+    "dist:mac": "npm run build && electron-builder --mac",
+    "dist:dir": "npm run build && electron-builder --dir"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",
@@ -21,6 +26,7 @@
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",
     "electron": "^44.8.0",
+    "electron-builder": "^26.15.3",
     "electron-vite": "^6.0.0",
     "tailwindcss": "^4.3.3",
     "typescript": "^7.0.2",
