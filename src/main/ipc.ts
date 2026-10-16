@@ -54,12 +54,15 @@ export function parseAdminAction(input: unknown, allowDev: boolean): AdminAction
   }
 }
 
+let devMode = false
+
 export function snapshot(store: Store): AdminSnapshot {
   const state = store.getState()
-  return { state, serverNow: Date.now(), recovered: store.recovered, publicView: toPublicView(state) }
+  return { state, serverNow: Date.now(), recovered: store.recovered, devMode, publicView: toPublicView(state) }
 }
 
 export function registerIpc(store: Store, windows: WindowRefs, allowDev: boolean): void {
+  devMode = allowDev
   const fromAdmin = (e: IpcMainInvokeEvent): boolean => e.sender === windows.admin()?.webContents
   const fromPublic = (e: IpcMainInvokeEvent): boolean => e.sender === windows.public()?.webContents
 

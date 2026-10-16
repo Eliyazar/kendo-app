@@ -48,6 +48,8 @@ export interface PublicView {
   match: PublicMatch | null
   team: PublicTeamScore | null
   nextMatch: PublicMatchup | null
+  /** Set once the bracket final is decided and the board is empty. */
+  champion: { name: string; dojo: string } | null
 }
 
 export function describeCompetitor(t: Tournament, c: Competitor): { name: string; dojo: string } {
@@ -55,6 +57,15 @@ export function describeCompetitor(t: Tournament, c: Competitor): { name: string
   if (player) return { name: player.name, dojo: player.dojo }
   const team = c.teamId ? t.teams[c.teamId] : undefined
   return { name: '—', dojo: team?.name ?? '' }
+}
+
+/** Pool / bracket entrant: a player, or a team in team mode. */
+export function describeEntrant(t: Tournament, id: string | null): { name: string; dojo: string } {
+  if (!id) return { name: '—', dojo: '' }
+  const team = t.teams[id]
+  if (team) return { name: team.name, dojo: team.dojo }
+  const p = t.players[id]
+  return p ? { name: p.name, dojo: p.dojo } : { name: '—', dojo: '' }
 }
 
 export function nextScheduledMatch(t: Tournament): Match | null {
@@ -79,35 +90,45 @@ function teamScore(t: Tournament, m: Match): PublicTeamScore | null {
   }
 }
 
-function positionLabel(t: Tournament, m: Match): string | null {
+export function positionLabel(t: Tournament, m: Match): string | null {
   if (m.representative) return m.kind === 'tie-breaker' ? 'Representatives' : 'Daihyo-sen'
   return t.teamSize && m.position !== undefined ? (TEAM_POSITIONS[t.teamSize][m.position] ?? null) : null
 }
 
 const ROUND_NAMES = ['Final', 'Semi-final', 'Quarter-final']
 
+export function roundName(round: number, rounds: number): string {
+  const fromFinal = rounds - 1 - round
+  return ROUND_NAMES[fromFinal] ?? `Round of ${2 ** (fromFinal + 1)}`
+}
+
 export function matchLabel(t: Tournament, m: Match): string {
   if (m.kind === 'tie-breaker') return 'Tie-breaker'
   if (m.kind === 'pool') return t.pools.find((p) => p.id === m.poolId)?.name ?? 'Pool'
   const node = m.bracketNodeId && t.bracket ? t.bracket.nodes[m.bracketNodeId] : undefined
   if (!node || !t.bracket) return 'Elimination'
-  const fromFinal = t.bracket.rounds - 1 - node.round
-  return ROUND_NAMES[fromFinal] ?? `Round of ${2 ** (fromFinal + 1)}`
+  return roundName(node.round, t.bracket.rounds)
+}
+
+export function champion(t: Tournament): { name: string; dojo: string } | null {
+  const final = t.bracket ? Object.values(t.bracket.nodes).find((n) => !n.next) : undefined
+  return final?.winnerEntrantId ? describeEntrant(t, final.winnerEntrantId) : null
 }
 
 export function toPublicView(state: AppState): PublicView {
   const t = state.tournament
-  if (!t) return { tournamentName: null, match: null, team: null, nextMatch: null }
+  if (!t) return { tournamentName: null, match: null, team: null, nextMatch: null, champion: null }
 
   const m = t.activeMatchId ? t.matches[t.activeMatchId] : undefined
   const next = nextScheduledMatch(t)
   const nextMatch = next ? { aka: describeCompetitor(t, next.aka), shiro: describeCompetitor(t, next.shiro) } : null
-  if (!m) return { tournamentName: t.name, match: null, team: null, nextMatch }
+  if (!m) return { tournamentName: t.name, match: null, team: null, nextMatch, champion: champion(t) }
 
   const score = computeScore(m.events)
   const over = m.status === 'awaiting-confirmation' || m.status === 'completed'
   return {
     tournamentName: t.name,
+    champion: null,
     match: {
       id: m.id,
       status: m.status,

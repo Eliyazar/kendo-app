@@ -76,6 +76,8 @@ export interface AdminSnapshot {
   serverNow: number
   /** True when this session was restored after an unclean shutdown. */
   recovered: boolean
+  /** Development build: enables the demo loader. */
+  devMode: boolean
   /** Same projection the public screen shows, for the live preview. */
   publicView: PublicView
 }

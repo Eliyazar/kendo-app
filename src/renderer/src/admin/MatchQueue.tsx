@@ -1,7 +1,8 @@
 // Fight order on the shiai-jo, with results and a way to load a specific match.
 
+import { useEffect, useRef } from 'react'
 import type { AdminAction } from '@shared/ipc'
-import { describeCompetitor, matchLabel } from '@shared/public-view'
+import { describeCompetitor, matchLabel, positionLabel } from '@shared/public-view'
 import type { Match, Tournament } from '@shared/types'
 
 const STATUS_STYLE: Record<Match['status'], string> = {
@@ -18,6 +19,12 @@ function resultText(m: Match): string | null {
 }
 
 export function MatchQueue({ t, send }: { t: Tournament; send: (a: AdminAction) => void }) {
+  const activeRef = useRef<HTMLLIElement>(null)
+  useEffect(() => {
+    // Block body on purpose: newer Chromium returns a Promise here, which React would treat as a cleanup.
+    void activeRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  }, [t.activeMatchId])
+
   return (
     <aside className="flex w-80 shrink-0 flex-col overflow-hidden rounded-2xl border border-white/10 bg-neutral-900">
       <h2 className="border-b border-white/10 px-4 py-3 text-sm font-bold tracking-widest text-white/50 uppercase">
@@ -33,12 +40,13 @@ export function MatchQueue({ t, send }: { t: Tournament; send: (a: AdminAction) 
           const result = resultText(m)
           return (
             <li
+              ref={active ? activeRef : undefined}
               key={id}
               className={`border-b border-white/5 px-4 py-3 ${active ? 'bg-white/10' : ''} ${m.status === 'completed' ? 'opacity-60' : ''}`}
             >
               <div className="flex items-center justify-between text-xs text-white/40">
                 <span>
-                  #{i + 1} · {matchLabel(t, m)}
+                  #{i + 1} · {[matchLabel(t, m), positionLabel(t, m)].filter(Boolean).join(' · ')}
                 </span>
                 <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase ${STATUS_STYLE[m.status]}`}>
                   {active && m.status === 'scheduled' ? 'loaded' : m.status.replace('-', ' ')}

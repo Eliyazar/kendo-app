@@ -109,12 +109,22 @@ export function Scoreboard({ view }: { view: PublicView | null }) {
         </main>
       ) : (
         <main className="flex flex-1 flex-col items-center justify-center gap-6">
-          <div className="text-[96px] font-black">{view?.tournamentName ?? 'Kendo Tournament Manager'}</div>
-          <div className="text-[48px] opacity-50">Waiting for the next match</div>
+          {view?.champion ? (
+            <>
+              <div className="text-[52px] font-bold tracking-[0.3em] text-amber-300 uppercase">Champion</div>
+              <div className="text-center text-[140px] leading-none font-black">{view.champion.name}</div>
+              <div className="text-[56px] opacity-60">{view.champion.dojo}</div>
+            </>
+          ) : (
+            <>
+              <div className="text-[96px] font-black">{view?.tournamentName ?? 'Kendo Tournament Manager'}</div>
+              <div className="text-[48px] opacity-50">Waiting for the next match</div>
+            </>
+          )}
         </main>
       )}
 
-      <footer className="flex h-[110px] items-center gap-8 bg-neutral-950 px-12 text-[46px]">
+      <footer className={`flex h-[110px] items-center gap-8 bg-neutral-950 px-12 text-[46px] ${view?.champion ? 'invisible' : ''}`}>
         <span className="shrink-0 rounded-lg bg-white/10 px-5 py-1 text-[34px] font-bold tracking-widest uppercase">Next match</span>
         <span className="truncate font-semibold">
           {view?.nextMatch ? (

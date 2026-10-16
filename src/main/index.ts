@@ -43,7 +43,11 @@ function buildMenu(): void {
   )
 }
 
-// One instance only: two copies would fight over the state file.
+// Optional separate data folder, e.g. to rehearse a tournament next to a live one.
+const profileDir = process.env['KENDO_PROFILE_DIR']
+if (profileDir) app.setPath('userData', profileDir)
+
+// One instance per data folder: two copies would fight over the state file.
 if (!app.requestSingleInstanceLock()) {
   app.quit()
 } else {
