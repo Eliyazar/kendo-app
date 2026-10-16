@@ -61,7 +61,20 @@ export class StateFile {
         return { state: env.state, recovered: !env.cleanShutdown && env.state.tournament !== null }
       }
     }
+    this.keepOutdated()
     return { state: null, recovered: false }
+  }
+
+  /** A file from an older app version is set aside, never overwritten. */
+  private keepOutdated(): void {
+    try {
+      const env = JSON.parse(fs.readFileSync(this.file, 'utf8')) as Partial<Envelope>
+      if (typeof env.schemaVersion === 'number' && env.schemaVersion !== SCHEMA_VERSION) {
+        fs.copyFileSync(this.file, `${this.file}.schema-v${env.schemaVersion}-${Date.now()}.json`)
+      }
+    } catch {
+      /* missing or unreadable: nothing to keep */
+    }
   }
 
   save(state: AppState, now: number, cleanShutdown = false): void {
