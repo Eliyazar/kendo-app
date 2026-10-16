@@ -12,6 +12,9 @@ export default defineConfig({
   preload: {
     resolve: { alias },
     build: {
+      // Sandboxed preloads cannot require sibling chunks: bundle each entry standalone.
+      isolatedEntries: true,
+      externalizeDeps: false,
       rollupOptions: {
         input: {
           admin: resolve('src/preload/admin.ts'),
