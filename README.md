@@ -48,6 +48,12 @@ src/
 
 The state lives in the main process (driven only by Admin actions) so the clock keeps running even if a renderer reloads, and every change is on disk before anyone sees it.
 
+### Screens
+
+- **Public Scoreboard**: drawn on a fixed 1920×1080 canvas and scaled to the display. It has a red/white split, names, dojo, circled ippon letters (M/K/D/T, H for an ippon from hansoku), yellow hansoku triangles and a "Next Match" footer. It never shows the clock. At time-up it flashes **TIME UP** and plays a buzzer.
+- **Admin Control Panel**: a live preview of the public screen (the same component, scaled down), the master timer (Start/Pause, ±1 s, Reset), Aka/Shiro scoring panels (M, K, D, T, H, Fusen-gachi), Undo and the match order list. When a match ends, a verification modal offers **Correction / Undo** and **Approve & End Match**, or **Start Encho** for a drawn elimination match.
+- Shortcuts: `Space` starts or pauses the clock, `Ctrl/Cmd+Z` undoes the last action, and `Ctrl/Cmd+Shift+P` reopens the public window.
+
 ### Crash recovery
 
 The state file is rewritten on every action and every second while the clock runs. A running clock is saved as *paused at the current time*, so after a crash or power loss the match restores to the same score and second, paused, waiting for the operator. A clean quit is flagged; anything else shows a "restored" notice.
