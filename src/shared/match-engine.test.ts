@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { newMatch } from './demo'
+import { newMatch } from './encounters'
 import { computeScore, reduceMatch, RuleError, timerDisplayMs, type MatchAction } from './match-engine'
 import type { Match, MatchConfig } from './types'
 

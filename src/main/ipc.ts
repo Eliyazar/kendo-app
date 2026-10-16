@@ -2,8 +2,11 @@
 // Only the Admin window may change state; the Public window is read-only.
 
 import { ipcMain, type BrowserWindow, type IpcMainInvokeEvent } from 'electron'
-import { ADMIN_ACTION_TYPES, IPC, type AdminAction, type AdminSnapshot, type DispatchResult } from '@shared/ipc'
+import { ADMIN_ACTION_TYPES, IPC, type AdminAction, type AdminSnapshot, type DispatchResult, type ImportResult } from '@shared/ipc'
 import { toPublicView, type PublicView } from '@shared/public-view'
+import { importParticipants } from './import'
+import type { TournamentSetup } from '@shared/setup'
+import type { Side } from '@shared/types'
 import type { Store } from './store'
 
 export interface WindowRefs {
@@ -31,6 +34,19 @@ export function parseAdminAction(input: unknown, allowDev: boolean): AdminAction
       return Number.isFinite(a['deltaMs']) && Math.abs(a['deltaMs'] as number) <= 60_000 ? (a as AdminAction) : null
     case 'LOAD_MATCH':
       return typeof a['matchId'] === 'string' ? (a as AdminAction) : null
+    case 'SET_REPRESENTATIVE':
+      return SIDES.includes(a['side'] as string) && typeof a['playerId'] === 'string'
+        ? { type: 'SET_REPRESENTATIVE', side: a['side'] as Side, playerId: a['playerId'] as string }
+        : null
+    case 'GENERATE_TIE_BREAKER': {
+      const ids = a['entrantIds']
+      return typeof a['poolId'] === 'string' && Array.isArray(ids) && ids.length <= 16 && ids.every((x) => typeof x === 'string')
+        ? { type: 'GENERATE_TIE_BREAKER', poolId: a['poolId'] as string, entrantIds: ids as string[] }
+        : null
+    }
+    case 'CREATE_TOURNAMENT':
+      // The setup payload is fully validated by validateSetup() in the reducer.
+      return { type: 'CREATE_TOURNAMENT', setup: a['setup'] as TournamentSetup }
     case 'DEV_LOAD_DEMO':
       return allowDev ? (a as AdminAction) : null
     default:
@@ -55,6 +71,10 @@ export function registerIpc(store: Store, windows: WindowRefs, allowDev: boolean
   })
 
   ipcMain.handle(IPC.adminGetState, (e): AdminSnapshot | null => (fromAdmin(e) ? snapshot(store) : null))
+
+  ipcMain.handle(IPC.adminImport, (e): Promise<ImportResult | null> | null =>
+    fromAdmin(e) ? importParticipants(windows.admin()) : null
+  )
 
   ipcMain.handle(IPC.publicGetView, (e): PublicView | null =>
     fromPublic(e) || fromAdmin(e) ? toPublicView(store.getState()) : null

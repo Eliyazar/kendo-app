@@ -38,6 +38,7 @@ export class Store {
   dispatch(action: AppAction, now = Date.now()): DispatchResult {
     try {
       const { state, changed } = reduceApp(this.state, action, now)
+      if (changed && action.type === 'RESET_TOURNAMENT') this.file.archive(this.state, now)
       if (changed) {
         this.commit(state, now)
         this.onChange(this.state)

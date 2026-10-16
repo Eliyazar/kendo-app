@@ -77,6 +77,16 @@ export class StateFile {
     fs.renameSync(this.tmp, this.file)
   }
 
+  /** Keep a copy of a tournament before it is closed. */
+  archive(state: AppState, now: number): void {
+    const t = state.tournament
+    if (!t) return
+    const dir = path.join(path.dirname(this.file), 'archive')
+    fs.mkdirSync(dir, { recursive: true })
+    const safe = t.name.replace(/[^\w.-]+/g, '_').slice(0, 40)
+    fs.writeFileSync(path.join(dir, `${t.date}_${safe}_${now}.json`), JSON.stringify(state))
+  }
+
   private read(file: string): Envelope | null {
     try {
       const env = JSON.parse(fs.readFileSync(file, 'utf8')) as Envelope

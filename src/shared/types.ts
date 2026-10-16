@@ -178,6 +178,11 @@ export interface Match {
   /** Team bouts: parent team match and position index within it. */
   teamMatchId?: Id
   position?: number
+  /**
+   * Representative bout (daihyo-sen, or a team tie-breaker): the operator
+   * picks one player per team before it can start.
+   */
+  representative?: boolean
 }
 
 /** A team encounter made of one bout per position. */
@@ -188,6 +193,8 @@ export interface TeamMatch {
   shiroTeamId: Id
   /** Bout match ids in position order. */
   boutIds: Id[]
+  /** Representative bout added when a bracket encounter ends level. */
+  daihyoMatchId?: Id
   status: 'scheduled' | 'in-progress' | 'completed'
   poolId?: Id
   bracketNodeId?: Id
@@ -200,8 +207,6 @@ export interface TeamMatchResult {
   shiroWins: number
   akaIppons: number
   shiroIppons: number
-  /** Representative bout (daihyo-sen) used to break a tie, if any. */
-  daihyoMatchId?: Id
 }
 
 // ---------------------------------------------------------------------------
@@ -235,18 +240,6 @@ export interface Bracket {
   rounds: number
 }
 
-export interface PoolStanding {
-  entrantId: Id
-  wins: number
-  draws: number
-  losses: number
-  ipponsScored: number
-  ipponsConceded: number
-  rank: number
-  /** Flagged when tied with another entrant on every tie-break metric. */
-  absoluteTieWith: Id[]
-}
-
 export interface Tournament {
   id: Id
   name: string
@@ -258,6 +251,8 @@ export interface Tournament {
   /** Default match settings applied to newly generated matches. */
   poolMatchConfig: MatchConfig
   bracketMatchConfig: MatchConfig
+  /** Representative bouts and tie-breakers: ippon shobu with Encho. */
+  deciderConfig: MatchConfig
   /** Number of entrants that advance from each pool to the bracket. */
   advancePerPool: number
 
@@ -281,7 +276,7 @@ export interface Tournament {
 // Persisted application state
 // ---------------------------------------------------------------------------
 
-export const SCHEMA_VERSION = 1
+export const SCHEMA_VERSION = 2
 
 export interface AppState {
   schemaVersion: number

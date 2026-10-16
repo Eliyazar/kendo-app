@@ -2,6 +2,7 @@
 // Deliberately contains NO clock information (anti-stalling rule):
 // the public screen only learns that time is up, never how much is left.
 
+import { tallyEncounter } from './encounters'
 import { computeScore, pendingResult, type ScoreMark } from './match-engine'
 import { TEAM_POSITIONS, type AppState, type Competitor, type Match, type MatchStatus, type Side, type Tournament } from './types'
 
@@ -67,23 +68,20 @@ export function nextScheduledMatch(t: Tournament): Match | null {
 function teamScore(t: Tournament, m: Match): PublicTeamScore | null {
   const tm = m.teamMatchId ? t.teamMatches[m.teamMatchId] : undefined
   if (!tm) return null
-  const s: PublicTeamScore = {
+  const s = tallyEncounter(t, tm)
+  return {
     akaTeam: t.teams[tm.akaTeamId]?.name ?? '',
     shiroTeam: t.teams[tm.shiroTeamId]?.name ?? '',
-    akaWins: 0,
-    shiroWins: 0,
-    akaIppons: 0,
-    shiroIppons: 0
+    akaWins: s.akaWins,
+    shiroWins: s.shiroWins,
+    akaIppons: s.akaIppons,
+    shiroIppons: s.shiroIppons
   }
-  for (const boutId of tm.boutIds) {
-    const r = t.matches[boutId]?.result
-    if (!r) continue
-    if (r.winner === 'aka') s.akaWins++
-    if (r.winner === 'shiro') s.shiroWins++
-    s.akaIppons += r.akaIppons
-    s.shiroIppons += r.shiroIppons
-  }
-  return s
+}
+
+function positionLabel(t: Tournament, m: Match): string | null {
+  if (m.representative) return m.kind === 'tie-breaker' ? 'Representatives' : 'Daihyo-sen'
+  return t.teamSize && m.position !== undefined ? (TEAM_POSITIONS[t.teamSize][m.position] ?? null) : null
 }
 
 const ROUND_NAMES = ['Final', 'Semi-final', 'Quarter-final']
@@ -108,7 +106,6 @@ export function toPublicView(state: AppState): PublicView {
 
   const score = computeScore(m.events)
   const over = m.status === 'awaiting-confirmation' || m.status === 'completed'
-  const teamSize = t.teamSize
   return {
     tournamentName: t.name,
     match: {
@@ -119,7 +116,7 @@ export function toPublicView(state: AppState): PublicView {
       encho: m.encho,
       timeUp: m.endReason === 'time-up',
       winner: over ? pendingResult(m).winner : null,
-      positionLabel: teamSize && m.position !== undefined ? (TEAM_POSITIONS[teamSize][m.position] ?? null) : null,
+      positionLabel: positionLabel(t, m),
       label: matchLabel(t, m)
     },
     team: teamScore(t, m),
