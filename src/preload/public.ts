@@ -9,11 +9,6 @@ const bridge: PublicBridge = {
     const handler = (_e: IpcRendererEvent, view: PublicView): void => listener(view)
     ipcRenderer.on(IPC.publicView, handler)
     return () => ipcRenderer.removeListener(IPC.publicView, handler)
-  },
-  onBuzzer: (listener) => {
-    const handler = (): void => listener()
-    ipcRenderer.on(IPC.publicBuzzer, handler)
-    return () => ipcRenderer.removeListener(IPC.publicBuzzer, handler)
   }
 }
 

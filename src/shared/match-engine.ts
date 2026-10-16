@@ -184,13 +184,6 @@ export type MatchAction =
   /** Internal: periodic timer check from the main process. */
   | { type: 'TICK' }
 
-export type Effect = 'buzzer'
-
-export interface MatchUpdate {
-  match: Match
-  effects: Effect[]
-}
-
 const isScoring = (m: Match): boolean => m.status === 'scheduled' || m.status === 'in-progress'
 
 function requireScoring(m: Match): void {
@@ -207,62 +200,62 @@ function pushEvent(m: Match, now: number, event: NewEvent): Match {
 /**
  * Move the match into / out of `awaiting-confirmation` based on the rules.
  * Called after every action, and periodically via TICK.
+ * Returns the same object when nothing changes.
  */
-function settle(prev: Match, m: Match, now: number): MatchUpdate {
-  if (m.status === 'completed') return { match: m, effects: [] }
+function settle(m: Match, now: number): Match {
+  if (m.status === 'completed') return m
   const reason = evaluateEnd(m, now)
   if (reason) {
-    const next: Match = { ...m, status: 'awaiting-confirmation', endReason: reason, timer: pauseTimer(m.timer, now) }
-    const justEnded = prev.status !== 'awaiting-confirmation' || prev.endReason !== reason
-    return { match: next, effects: justEnded && reason === 'time-up' ? ['buzzer'] : [] }
+    if (m.status === 'awaiting-confirmation' && m.endReason === reason && m.timer.runningSince === null) return m
+    return { ...m, status: 'awaiting-confirmation', endReason: reason, timer: pauseTimer(m.timer, now) }
   }
   if (m.status === 'awaiting-confirmation' || m.endReason) {
     // A correction (gogi) undid the deciding point or added time back: back to play, clock stays paused.
     const { endReason: _dropped, ...rest } = m
-    return { match: { ...rest, status: 'in-progress' }, effects: [] }
+    return { ...rest, status: 'in-progress' }
   }
-  return { match: m, effects: [] }
+  return m
 }
 
-export function reduceMatch(m: Match, action: MatchAction, now: number): MatchUpdate {
+export function reduceMatch(m: Match, action: MatchAction, now: number): Match {
   switch (action.type) {
     case 'TICK':
-      return settle(m, m, now)
+      return settle(m, now)
 
     case 'TIMER_START':
       requireScoring(m)
       if (isTimeUp(m.timer, now)) throw new RuleError('Time is up. Reset or adjust the clock first.')
-      return settle(m, { ...m, status: 'in-progress', timer: startTimer(m.timer, now) }, now)
+      return settle({ ...m, status: 'in-progress', timer: startTimer(m.timer, now) }, now)
 
     case 'TIMER_PAUSE':
-      return { match: { ...m, timer: pauseTimer(m.timer, now) }, effects: [] }
+      return { ...m, timer: pauseTimer(m.timer, now) }
 
     case 'TIMER_RESET':
       if (m.status === 'completed') throw new RuleError('Match is completed.')
-      return settle(m, { ...m, timer: resetTimer(m.timer) }, now)
+      return settle({ ...m, timer: resetTimer(m.timer) }, now)
 
     case 'TIMER_ADJUST': {
       if (m.status === 'completed') throw new RuleError('Match is completed.')
       const { timer, applied } = adjustTimer(m.timer, action.deltaMs, now)
-      if (applied === 0) return { match: m, effects: [] }
+      if (applied === 0) return m
       const withEvent = pushEvent({ ...m, timer }, now, { kind: 'time-adjust', deltaMs: applied })
-      return settle(m, { ...withEvent, status: m.status === 'scheduled' ? 'scheduled' : withEvent.status }, now)
+      return settle({ ...withEvent, status: m.status === 'scheduled' ? 'scheduled' : withEvent.status }, now)
     }
 
     case 'ADD_IPPON':
       requireScoring(m)
-      return settle(m, pushEvent(m, now, { kind: 'ippon', side: action.side, technique: action.technique }), now)
+      return settle(pushEvent(m, now, { kind: 'ippon', side: action.side, technique: action.technique }), now)
 
     case 'ADD_HANSOKU':
       requireScoring(m)
-      return settle(m, pushEvent(m, now, { kind: 'hansoku', side: action.side }), now)
+      return settle(pushEvent(m, now, { kind: 'hansoku', side: action.side }), now)
 
     case 'FUSEN_GACHI':
       requireScoring(m)
       if (m.events.some((e) => e.kind !== 'time-adjust') || m.timer.elapsedMs > 0 || m.timer.runningSince !== null) {
         throw new RuleError('Fusen-gachi is only possible before the match has started.')
       }
-      return settle(m, pushEvent(m, now, { kind: 'fusen-gachi', side: action.side }), now)
+      return settle(pushEvent(m, now, { kind: 'fusen-gachi', side: action.side }), now)
 
     case 'UNDO': {
       if (m.status === 'completed') throw new RuleError('Match is completed.')
@@ -270,7 +263,7 @@ export function reduceMatch(m: Match, action: MatchAction, now: number): MatchUp
       if (!last) throw new RuleError('Nothing to undo.')
       let timer = m.timer
       if (last.kind === 'time-adjust') timer = adjustTimer(timer, -last.deltaMs, now).timer
-      return settle(m, { ...m, timer, events: m.events.slice(0, -1) }, now)
+      return settle({ ...m, timer, events: m.events.slice(0, -1) }, now)
     }
 
     case 'START_ENCHO': {
@@ -280,15 +273,12 @@ export function reduceMatch(m: Match, action: MatchAction, now: number): MatchUp
       }
       const { endReason: _dropped, ...rest } = m
       return {
-        match: {
-          ...rest,
-          status: 'in-progress',
-          encho: true,
-          enchoFromEvent: m.events.length,
-          // Encho runs as a stopwatch; hansoku carry over because events are kept.
-          timer: { mode: 'stopwatch', durationMs: 0, elapsedMs: 0, runningSince: null }
-        },
-        effects: []
+        ...rest,
+        status: 'in-progress',
+        encho: true,
+        enchoFromEvent: m.events.length,
+        // Encho runs as a stopwatch; hansoku carry over because events are kept.
+        timer: { mode: 'stopwatch', durationMs: 0, elapsedMs: 0, runningSince: null }
       }
     }
 
@@ -305,7 +295,7 @@ export function reduceMatch(m: Match, action: MatchAction, now: number): MatchUp
         shiroHansoku: r.score.shiro.hansoku,
         approvedAt: now
       }
-      return { match: { ...m, status: 'completed', result }, effects: [] }
+      return { ...m, status: 'completed', result }
     }
   }
 }

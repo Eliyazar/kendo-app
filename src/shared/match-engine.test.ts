@@ -7,13 +7,8 @@ const POOL: MatchConfig = { durationMs: 180_000, ipponsToWin: 2, enchoOnDraw: fa
 const BRACKET: MatchConfig = { ...POOL, enchoOnDraw: true }
 
 function run(m: Match, steps: [MatchAction, number][]) {
-  let effects: string[] = []
-  for (const [action, now] of steps) {
-    const r = reduceMatch(m, action, now)
-    m = r.match
-    effects = [...effects, ...r.effects]
-  }
-  return { m, effects }
+  for (const [action, now] of steps) m = reduceMatch(m, action, now)
+  return { m }
 }
 
 describe('timer', () => {
@@ -32,19 +27,18 @@ describe('timer', () => {
       [{ type: 'TIMER_ADJUST', deltaMs: 1000 }, 10_000]
     ])
     expect(timerDisplayMs(m.timer, 0)).toBe(171_000)
-    const undone = reduceMatch(m, { type: 'UNDO' }, 10_000).match
+    const undone = reduceMatch(m, { type: 'UNDO' }, 10_000)
     expect(timerDisplayMs(undone.timer, 0)).toBe(170_000)
   })
 
-  it('ends the match with a buzzer when time runs out', () => {
-    const { m, effects } = run(newMatch('x', 'pool', 'a', 'b', POOL), [
+  it('ends the match when time runs out', () => {
+    const { m } = run(newMatch('x', 'pool', 'a', 'b', POOL), [
       [{ type: 'TIMER_START' }, 0],
       [{ type: 'TICK' }, 180_050]
     ])
     expect(m.status).toBe('awaiting-confirmation')
     expect(m.endReason).toBe('time-up')
     expect(m.timer.runningSince).toBeNull()
-    expect(effects).toEqual(['buzzer'])
   })
 
   it('adding time back after time-up reopens the match', () => {
@@ -81,7 +75,7 @@ describe('scoring rules', () => {
     expect(s.aka.ippons).toBe(1)
     expect(s.aka.marks).toEqual([{ kind: 'hansoku' }])
     expect(s.shiro.hansoku).toBe(3)
-    const fourth = reduceMatch(m, { type: 'ADD_HANSOKU', side: 'shiro' }, 0).match
+    const fourth = reduceMatch(m, { type: 'ADD_HANSOKU', side: 'shiro' }, 0)
     expect(computeScore(fourth.events).aka.ippons).toBe(2)
     expect(fourth.status).toBe('awaiting-confirmation')
   })
@@ -123,15 +117,15 @@ describe('encho', () => {
       [{ type: 'TICK' }, 180_000]
     ])
     expect(() => reduceMatch(m, { type: 'APPROVE_MATCH' }, 0)).toThrow(/Encho/)
-    m = reduceMatch(m, { type: 'START_ENCHO' }, 0).match
+    m = reduceMatch(m, { type: 'START_ENCHO' }, 0)
     expect(m.encho).toBe(true)
     expect(m.timer.mode).toBe('stopwatch')
 
     // Aka's carried-over hansoku + a second one gives Shiro the winning point.
-    m = reduceMatch(m, { type: 'ADD_HANSOKU', side: 'aka' }, 1000).match
+    m = reduceMatch(m, { type: 'ADD_HANSOKU', side: 'aka' }, 1000)
     expect(m.status).toBe('awaiting-confirmation')
     expect(m.endReason).toBe('encho-ippon')
-    m = reduceMatch(m, { type: 'APPROVE_MATCH' }, 2000).match
+    m = reduceMatch(m, { type: 'APPROVE_MATCH' }, 2000)
     expect(m.result).toMatchObject({ winner: 'shiro', decision: 'encho' })
   })
 
@@ -141,10 +135,10 @@ describe('encho', () => {
       [{ type: 'TIMER_ADJUST', deltaMs: -60_000 }, 0],
       [{ type: 'TICK' }, 120_000]
     ])
-    m = reduceMatch(m, { type: 'START_ENCHO' }, 120_000).match
+    m = reduceMatch(m, { type: 'START_ENCHO' }, 120_000)
     expect(() => reduceMatch(m, { type: 'UNDO' }, 120_000)).toThrow(RuleError)
-    m = reduceMatch(m, { type: 'ADD_IPPON', side: 'aka', technique: 'K' }, 125_000).match
-    m = reduceMatch(m, { type: 'UNDO' }, 126_000).match
+    m = reduceMatch(m, { type: 'ADD_IPPON', side: 'aka', technique: 'K' }, 125_000)
+    m = reduceMatch(m, { type: 'UNDO' }, 126_000)
     expect(m.status).toBe('in-progress')
     expect(m.events).toHaveLength(1)
   })

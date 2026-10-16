@@ -34,7 +34,7 @@ src/
     ipc.ts           ipcMain handlers, sender checks, action validation, broadcast
   preload/       contextBridge APIs
     admin.ts         window.kendoAdmin  { dispatch, getState, onState }
-    public.ts        window.kendoPublic { getView, onView, onBuzzer }  (read-only)
+    public.ts        window.kendoPublic { getView, onView }  (read-only)
   renderer/      React apps (admin.html, public.html)
 ```
 
@@ -43,14 +43,13 @@ src/
 1. The Admin window calls `window.kendoAdmin.dispatch(action)`.
 2. Main validates the sender and payload, runs the pure reducer, **persists to disk**, then pushes:
    - an `AdminSnapshot` (full state + main clock) to the Admin window,
-   - a `PublicView` (names, points, penalties, next match, *never the clock*) to the Public window,
-   - a `buzzer` event to the Public window when time runs out.
+   - a `PublicView` (names, points, penalties, next match, *never the clock*) to the Public window.
 
 The state lives in the main process (driven only by Admin actions) so the clock keeps running even if a renderer reloads, and every change is on disk before anyone sees it.
 
 ### Screens
 
-- **Public Scoreboard**: drawn on a fixed 1920×1080 canvas and scaled to the display. It has a red/white split, names, dojo, circled ippon letters (M/K/D/T, H for an ippon from hansoku), yellow hansoku triangles and a "Next Match" footer. It never shows the clock. At time-up it flashes **TIME UP** and plays a buzzer.
+- **Public Scoreboard**: drawn on a fixed 1920×1080 canvas and scaled to the display. It has a red/white split, names, dojo, circled ippon letters (M/K/D/T, H for an ippon from hansoku), yellow hansoku triangles and a "Next Match" footer. It never shows the clock. At time-up it flashes **TIME UP** (no sound: the referees whistle).
 - **Admin Control Panel**: a live preview of the public screen (the same component, scaled down), the master timer (Start/Pause, ±1 s, Reset), Aka/Shiro scoring panels (M, K, D, T, H, Fusen-gachi), Undo and the match order list. When a match ends, a verification modal offers **Correction / Undo** and **Approve & End Match**, or **Start Encho** for a drawn elimination match.
 - Shortcuts: `Space` starts or pauses the clock, `Ctrl/Cmd+Z` undoes the last action, and `Ctrl/Cmd+Shift+P` reopens the public window.
 

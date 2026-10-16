@@ -8,9 +8,7 @@ function secureDefaults(page: Page): BrowserWindowConstructorOptions['webPrefere
     preload: join(__dirname, `../preload/${page}.js`),
     contextIsolation: true,
     sandbox: true,
-    nodeIntegration: false,
-    // The public screen plays the time-up buzzer without any user gesture.
-    autoplayPolicy: page === 'public' ? 'no-user-gesture-required' : 'user-gesture-required'
+    nodeIntegration: false
   }
 }
 

@@ -56,7 +56,7 @@ if (!app.requestSingleInstanceLock()) {
 
   app.whenReady().then(() => {
     const file = new StateFile(app.getPath('userData'))
-    const store: Store = new Store(file, (_state, effects) => broadcast(store, windows, effects))
+    const store: Store = new Store(file, () => broadcast(store, windows))
     registerIpc(store, windows, !app.isPackaged)
     store.start()
 

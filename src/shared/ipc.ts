@@ -4,7 +4,6 @@
 //   Admin renderer --dispatch(action)--> Main (reduces, persists)
 //   Main --AdminSnapshot--> Admin renderer
 //   Main --PublicView-----> Public renderer   (redacted: no clock)
-//   Main --buzzer---------> Public renderer   (TV speakers)
 
 import type { AppState, Side, Technique } from './types'
 import type { PublicView } from './public-view'
@@ -19,9 +18,7 @@ export const IPC = {
   /** invoke, public -> main: fetch the current PublicView. */
   publicGetView: 'public:get-view',
   /** send, main -> public: new PublicView. */
-  publicView: 'public:view',
-  /** send, main -> public: play the time-up buzzer. */
-  publicBuzzer: 'public:buzzer'
+  publicView: 'public:view'
 } as const
 
 /** Everything the operator can do. Only the Admin window may dispatch. */
@@ -82,5 +79,4 @@ export interface AdminBridge {
 export interface PublicBridge {
   getView(): Promise<PublicView>
   onView(listener: (view: PublicView) => void): Unsubscribe
-  onBuzzer(listener: () => void): Unsubscribe
 }

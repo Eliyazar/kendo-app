@@ -6,7 +6,7 @@
 // window can never be handed data it must not show (the clock).
 
 import type { DispatchResult } from '@shared/ipc'
-import { RuleError, type Effect } from '@shared/match-engine'
+import { RuleError } from '@shared/match-engine'
 import { initialState, reduceApp, type AppAction } from '@shared/reducer'
 import type { AppState } from '@shared/types'
 import type { StateFile } from './persistence'
@@ -14,7 +14,7 @@ import type { StateFile } from './persistence'
 const TICK_MS = 100
 const RUNNING_SAVE_MS = 1000
 
-export type ChangeListener = (state: AppState, effects: Effect[]) => void
+export type ChangeListener = (state: AppState) => void
 
 export class Store {
   private state: AppState
@@ -37,9 +37,11 @@ export class Store {
 
   dispatch(action: AppAction, now = Date.now()): DispatchResult {
     try {
-      const { state, effects, changed } = reduceApp(this.state, action, now)
-      if (changed) this.commit(state, now)
-      if (changed || effects.length) this.onChange(this.state, effects)
+      const { state, changed } = reduceApp(this.state, action, now)
+      if (changed) {
+        this.commit(state, now)
+        this.onChange(this.state)
+      }
       return { ok: true }
     } catch (err) {
       if (err instanceof RuleError) return { ok: false, error: err.message }

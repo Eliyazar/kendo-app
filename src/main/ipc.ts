@@ -4,7 +4,6 @@
 import { ipcMain, type BrowserWindow, type IpcMainInvokeEvent } from 'electron'
 import { ADMIN_ACTION_TYPES, IPC, type AdminAction, type AdminSnapshot, type DispatchResult } from '@shared/ipc'
 import { toPublicView, type PublicView } from '@shared/public-view'
-import type { Effect } from '@shared/match-engine'
 import type { Store } from './store'
 
 export interface WindowRefs {
@@ -62,14 +61,11 @@ export function registerIpc(store: Store, windows: WindowRefs, allowDev: boolean
   )
 }
 
-/** Push the new state to both windows and run side effects. */
-export function broadcast(store: Store, windows: WindowRefs, effects: Effect[]): void {
+/** Push the new state to both windows. */
+export function broadcast(store: Store, windows: WindowRefs): void {
   const admin = windows.admin()
   const pub = windows.public()
   const snap = snapshot(store)
   if (admin && !admin.isDestroyed()) admin.webContents.send(IPC.adminState, snap)
-  if (pub && !pub.isDestroyed()) {
-    pub.webContents.send(IPC.publicView, snap.publicView)
-    if (effects.includes('buzzer')) pub.webContents.send(IPC.publicBuzzer)
-  }
+  if (pub && !pub.isDestroyed()) pub.webContents.send(IPC.publicView, snap.publicView)
 }
