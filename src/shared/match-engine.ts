@@ -164,6 +164,12 @@ export function pendingResult(match: Match): PendingResult {
 // Reducer
 // ---------------------------------------------------------------------------
 
+/** The event UNDO would remove. Events from before Encho started are locked. */
+export function lastUndoableEvent(m: Match): PointEvent | undefined {
+  if (m.encho && m.events.length <= (m.enchoFromEvent ?? 0)) return undefined
+  return m.events.at(-1)
+}
+
 export type MatchAction =
   | { type: 'TIMER_START' }
   | { type: 'TIMER_PAUSE' }
@@ -210,8 +216,8 @@ function settle(prev: Match, m: Match, now: number): MatchUpdate {
     const justEnded = prev.status !== 'awaiting-confirmation' || prev.endReason !== reason
     return { match: next, effects: justEnded && reason === 'time-up' ? ['buzzer'] : [] }
   }
-  if (m.status === 'awaiting-confirmation') {
-    // A correction (gogi) undid the deciding point: back to play, clock stays paused.
+  if (m.status === 'awaiting-confirmation' || m.endReason) {
+    // A correction (gogi) undid the deciding point or added time back: back to play, clock stays paused.
     const { endReason: _dropped, ...rest } = m
     return { match: { ...rest, status: 'in-progress' }, effects: [] }
   }
@@ -260,7 +266,7 @@ export function reduceMatch(m: Match, action: MatchAction, now: number): MatchUp
 
     case 'UNDO': {
       if (m.status === 'completed') throw new RuleError('Match is completed.')
-      const last = m.events.at(-1)
+      const last = lastUndoableEvent(m)
       if (!last) throw new RuleError('Nothing to undo.')
       let timer = m.timer
       if (last.kind === 'time-adjust') timer = adjustTimer(timer, -last.deltaMs, now).timer
@@ -278,6 +284,7 @@ export function reduceMatch(m: Match, action: MatchAction, now: number): MatchUp
           ...rest,
           status: 'in-progress',
           encho: true,
+          enchoFromEvent: m.events.length,
           // Encho runs as a stopwatch; hansoku carry over because events are kept.
           timer: { mode: 'stopwatch', durationMs: 0, elapsedMs: 0, runningSince: null }
         },

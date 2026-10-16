@@ -166,6 +166,8 @@ export interface Match {
   timer: TimerState
   /** True once Encho (overtime) has been started for this match. */
   encho: boolean
+  /** Number of events recorded before Encho started; undo cannot go below this. */
+  enchoFromEvent?: number
   events: PointEvent[]
   endReason?: MatchEndReason
   result?: MatchResult

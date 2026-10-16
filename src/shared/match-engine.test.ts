@@ -46,6 +46,17 @@ describe('timer', () => {
     expect(m.timer.runningSince).toBeNull()
     expect(effects).toEqual(['buzzer'])
   })
+
+  it('adding time back after time-up reopens the match', () => {
+    const { m } = run(newMatch('x', 'pool', 'a', 'b', POOL), [
+      [{ type: 'TIMER_START' }, 0],
+      [{ type: 'TICK' }, 180_050],
+      [{ type: 'TIMER_ADJUST', deltaMs: 1000 }, 181_000]
+    ])
+    expect(m.status).toBe('in-progress')
+    expect(m.endReason).toBeUndefined()
+    expect(timerDisplayMs(m.timer, 0)).toBe(1000)
+  })
 })
 
 describe('scoring rules', () => {
@@ -122,6 +133,20 @@ describe('encho', () => {
     expect(m.endReason).toBe('encho-ippon')
     m = reduceMatch(m, { type: 'APPROVE_MATCH' }, 2000).match
     expect(m.result).toMatchObject({ winner: 'shiro', decision: 'encho' })
+  })
+
+  it('undo cannot reach back past the start of encho', () => {
+    let { m } = run(newMatch('x', 'bracket', 'a', 'b', BRACKET), [
+      [{ type: 'TIMER_START' }, 0],
+      [{ type: 'TIMER_ADJUST', deltaMs: -60_000 }, 0],
+      [{ type: 'TICK' }, 120_000]
+    ])
+    m = reduceMatch(m, { type: 'START_ENCHO' }, 120_000).match
+    expect(() => reduceMatch(m, { type: 'UNDO' }, 120_000)).toThrow(RuleError)
+    m = reduceMatch(m, { type: 'ADD_IPPON', side: 'aka', technique: 'K' }, 125_000).match
+    m = reduceMatch(m, { type: 'UNDO' }, 126_000).match
+    expect(m.status).toBe('in-progress')
+    expect(m.events).toHaveLength(1)
   })
 
   it('draw in a pool match is hikiwake', () => {
