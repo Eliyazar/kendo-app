@@ -1,5 +1,28 @@
+import { readFileSync } from 'node:fs'
+import Papa from 'papaparse'
 import { describe, expect, it } from 'vitest'
 import { rowsToEntrants } from './import-parse'
+import { validateSetup } from './setup'
+
+const sample = (name: string) =>
+  rowsToEntrants(Papa.parse<string[]>(readFileSync(`samples/${name}`, 'utf8'), { skipEmptyLines: true }).data)
+
+describe('sample files', () => {
+  it('individual sample is a valid tournament', () => {
+    const r = sample('participants-individual.csv')
+    expect(r.warnings).toEqual([])
+    expect(r.entrants[0]).toEqual({ name: 'Takeshi Yamada', dojo: 'Kenshinkan', grade: '4 Dan', seed: 1 })
+    const setup = { name: 'X', date: '2026-10-17', mode: 'individual', poolSize: 3, advancePerPool: 2, poolMatchMinutes: 3, bracketMatchMinutes: 3, entrants: r.entrants }
+    expect(typeof validateSetup(setup)).toBe('object')
+  })
+
+  it('team sample is a valid 3-person team tournament', () => {
+    const r = sample('participants-team.csv')
+    expect(r.entrants.every((e) => e.team)).toBe(true)
+    const setup = { name: 'X', date: '2026-10-17', mode: 'team', teamSize: 3, poolSize: 2, advancePerPool: 1, poolMatchMinutes: 3, bracketMatchMinutes: 3, entrants: r.entrants }
+    expect(typeof validateSetup(setup)).toBe('object')
+  })
+})
 
 describe('rowsToEntrants', () => {
   it('maps header aliases and splits first/last names', () => {
