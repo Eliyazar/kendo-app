@@ -28,13 +28,51 @@ Installers are not code-signed, so Windows SmartScreen and macOS Gatekeeper will
 
 ## Running a tournament
 
-1. **Setup**: enter the name, date and mode (individual or team with 3/4/5 players), pool size, qualifiers per pool and match times. Add participants by hand or with **Import CSV / Excel…** (see `samples/`).
-   - Recognised columns: `Name` (or `First name` + `Last name`), `Dojo`/`Club`, `Team`, `Grade`, `Seed`. German and French header names work too. CSV with `,` or `;` and `.xlsx` (first sheet) are supported.
-   - Team mode: players with the same `Team` value form one team, in file order. Short teams keep empty positions, and those bouts are won by fusen-gachi.
+1. **Setup**: enter the name, date, mode (individual, or teams of 3/4/5), pool size, qualifiers per pool, match times and number of courts. Add participants by hand or with **Import CSV / Excel…** (see `samples/`). Tick **Here** for everyone who checks in; once anyone is ticked, absent people are left out of the draw.
+   - Recognised columns: `Name` (or `First name` + `Last name`), `Dojo`/`Club`, `Country`, `Team`, `Grade`, `Seed`. German, French and Bulgarian header names work too. CSV with `,` or `;` and `.xlsx` (first sheet) are supported.
+   - **Country** accepts names or codes in many spellings (`Bulgaria`, `BGR`, `България`) and is stored as the **IOC code** (`BUL`, `SRB`, `GER`).
+   - Team mode: players with the same `Team` value form one team, in file order. The first ones are the default order, and up to 2 more are reserves. Short teams keep empty positions, and those bouts are won by fusen-gachi. Each team gets a 6-digit **captain PIN**.
 2. **Pools**: the draw spreads seeded entrants first and keeps dojo mates apart. The round-robin fight order is interleaved across pools, so fighters rest between matches.
 3. **Pool Review** (Pools tab): standings are ranked by wins › (team: bouts won) › ippons scored › ippons conceded › head-to-head. An absolute tie on a qualifying place is flagged with **Generate Tie-Breaker Match**: an ippon-shobu with Encho (representatives in team mode). **Lock Pools & Generate Brackets** is enabled once every pool match is approved and no ties remain.
 4. **Bracket**: pool winners are seeded first, and same-pool qualifiers go to opposite halves. Byes are handled, and winners advance automatically. A level team encounter (wins and ippons) gets a **daihyo-sen**, where the operator picks one representative per team.
-5. **Close tournament** archives it to `archive/` in the data folder before starting a new one.
+5. **When the final is approved**, the results are saved automatically to `Documents/Kendo Tournament Manager/<date> <name>/`:
+   - `results.pdf` and `results.csv`.
+   - `diplomas/`: one PDF each for 1st, 2nd and both semi-final losers (3rd); in team mode, one for every team member.
+   - `captain-pins.pdf` (team mode).
+
+   **Settings → Export results now** does the same at any time. For a custom diploma design, put `diploma-template.png` (A4 landscape) into the app's data folder; the text is printed on it.
+6. **Close tournament** archives it to `archive/` in the data folder before starting a new one.
+
+### Changing a running tournament (Participants tab, match order)
+
+- **Edit** names, dojos, countries and grades at any time.
+- **Withdraw** someone: if nobody in their pool has fought yet, they simply leave the pool. Otherwise their remaining matches are lost by **kiken** (the opponent wins 2–0). In the bracket, the opponent advances.
+- **Late entry** (pool phase): joins the smallest pool and gets a match against every member.
+- **Edit result** (✎ in the match order) corrects an approved match. Pool results can change until the pools are locked. A bracket result can change who advances only while the next round has not started.
+- **Teams**: rename, add or remove members, set the default order, and set the order for a specific encounter. Each order locks when that encounter's first bout starts. Captains can also send it from their phone (see Online results), and the table can always override it.
+
+### Stream overlay (OBS)
+
+**Settings → Stream overlay**: turn on *Share on the local network* and copy the address (e.g. `http://192.168.1.20:7777/overlay?court=A`). In OBS on the streaming PC, add a **Browser Source** with that URL at 1920×1080. It shows a transparent lower-third score bar (names, country, points, hansoku, team score) that updates instantly, and never the clock. Windows asks once to allow the app on private networks.
+
+### Several courts
+
+Every court has its own laptop and TV:
+- One laptop is the **host**: it owns the tournament, runs every clock and saves everything. Turn on local network sharing there. Settings shows the host address and a **join code**.
+- Each other court's laptop chooses **Join a host as a court**, enters the address and code, and picks its court.
+- Pools are spread over the courts. **Load here** in the match order moves a waiting match to your court. The final is on the first court.
+
+### Online results (phones, people at home)
+
+The `cloud/` folder is a small Cloudflare Workers site (see `cloud/README.md` for the one-time setup).
+- Enter its URL and publish key under **Settings → Online results**. The laptop publishes every change, and spectators open the link or scan the QR code, using their own mobile data.
+- The page shows live courts, schedule, pools, bracket and results, and team captains set their team order with their PIN.
+- An encounter's order stays hidden from everyone else until that encounter starts.
+- If the internet drops, the tournament is unaffected; publishing resumes automatically.
+
+### Rehearsal copy
+
+Start a second copy with its own data folder, e.g. to practise next to a live tournament, by setting `KENDO_PROFILE_DIR=<folder>`. Its exports stay in that folder.
 
 ## Architecture
 
@@ -42,7 +80,13 @@ Installers are not code-signed, so Windows SmartScreen and macOS Gatekeeper will
 src/
   shared/        Pure TypeScript, used by every process
     types.ts         Data schema: Tournament, Match, Player, Team, PointEvent, ...
-    match-engine.ts  Kendo rules: timer, Nihon Shobu, Hansoku math, Encho, undo
+    match-engine.ts  Kendo rules: timer, Nihon Shobu, Hansoku math, Encho, undo, kiken
+    courts.ts        Courts: which match each one shows, loading the next
+    editing.ts       Withdrawals, late entries, result corrections, teams and orders
+    progress.ts      After a bout: team tally, bracket advance (also on corrections)
+    countries.ts     IOC country codes and spellings
+    published.ts     Snapshot for the online page (+ secret part for the worker)
+    report.ts        Results report, diplomas, captain PIN slips, CSV
     setup.ts         Setup validation, pool draw, round-robin scheduling
     standings.ts     Pool standings, tie-break chain, absolute-tie detection
     bracket.ts       Seeding, byes, winner progression
@@ -57,11 +101,18 @@ src/
     store.ts         Authoritative state, 100 ms clock loop, auto-save
     persistence.ts   Atomic JSON writes (tmp + fsync + rename, .bak fallback), archive
     import.ts        File picker + CSV/XLSX reading
+    context.ts       Host or court laptop: tournament source, settings, notices
+    server.ts        Local network server: OBS overlay, live events, court laptops
+    court-client.ts  Court laptop: mirror the host, send this court's actions
+    publisher.ts     Online publishing and captains' team orders
+    export.ts        PDFs (report, diplomas, PIN slips) and CSV
+    settings.ts      Per-laptop settings
     ipc.ts           ipcMain handlers, sender checks, action validation, broadcast
   preload/       contextBridge APIs
     admin.ts         window.kendoAdmin  { dispatch, getState, onState, importParticipants }
     public.ts        window.kendoPublic { getView, onView }  (read-only)
-  renderer/      React apps (admin.html, public.html)
+  renderer/      React apps (admin.html, public.html, overlay.html)
+cloud/           Cloudflare Workers site for online results (own package.json)
 ```
 
 ### Data flow
