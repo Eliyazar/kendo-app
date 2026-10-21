@@ -114,7 +114,7 @@ export class LocalServer {
     const t = this.deps.getState().tournament
     return [...this.listeners]
       .filter((l) => l.kind === 'court')
-      .map((l) => ({ courtName: t?.courts.find((c) => c.id === l.court)?.name ?? '?', address: l.address }))
+      .map((l) => ({ courtName: t?.courts.find((c) => c.id === resolveCourt(t, l.court))?.name ?? '—', address: l.address }))
   }
 
   /** Push the new state to every overlay and court laptop. */

@@ -94,7 +94,7 @@ export function SettingsView({ snap, save }: { snap: AdminSnapshot; save: Save }
           <span className="text-muted">Port</span>
           <input
             type="number"
-            className={`${box} w-28`}
+            className="w-28 rounded-lg border border-line bg-surface-2 px-3 py-2 outline-none focus:border-hansoku"
             defaultValue={s.port}
             onBlur={(e) => Number(e.target.value) !== s.port && void save({ port: Number(e.target.value) })}
           />

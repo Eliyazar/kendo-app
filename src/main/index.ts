@@ -1,3 +1,4 @@
+import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { app, BrowserWindow, Menu } from 'electron'
 import { AppContext } from './context'
@@ -47,7 +48,10 @@ function buildMenu(): void {
 
 // Optional separate data folder, e.g. to rehearse a tournament next to a live one.
 const profileDir = process.env['KENDO_PROFILE_DIR']
-if (profileDir) app.setPath('userData', profileDir)
+if (profileDir) {
+  mkdirSync(profileDir, { recursive: true })
+  app.setPath('userData', profileDir)
+}
 
 // One instance per data folder: two copies would fight over the state file.
 if (!app.requestSingleInstanceLock()) {

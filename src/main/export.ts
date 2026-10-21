@@ -36,7 +36,9 @@ async function diplomaBackground(): Promise<string | undefined> {
 export async function exportResults(state: AppState, onlineUrl: string | null = null): Promise<ExportResult> {
   const t = state.tournament
   if (!t) return { ok: false, error: 'No tournament loaded.' }
-  const folder = path.join(app.getPath('documents'), 'Kendo Tournament Manager', safe(`${t.date} ${t.name}`))
+  // A rehearsal copy (KENDO_PROFILE_DIR) keeps its exports in its own data folder.
+  const base = process.env['KENDO_PROFILE_DIR'] ? path.join(app.getPath('userData'), 'exports') : path.join(app.getPath('documents'), 'Kendo Tournament Manager')
+  const folder = path.join(base, safe(`${t.date} ${t.name}`))
   const win = new BrowserWindow({ show: false, webPreferences: { sandbox: true, javascript: false } })
   try {
     await fs.mkdir(path.join(folder, 'diplomas'), { recursive: true })

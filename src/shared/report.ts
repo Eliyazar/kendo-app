@@ -95,7 +95,7 @@ function poolTables(t: Tournament): string {
         .map((r) => {
           const who = describeEntrant(t, r.entrantId)
           const out = (team ? t.teams[r.entrantId]?.withdrawn : t.players[r.entrantId]?.withdrawn) ? ' (withdrawn)' : ''
-          return `<tr class="${r.rank <= t.advancePerPool ? 'q' : ''}"><td>${r.rank}</td><td>${esc(who.name)}${out}<small>${esc([who.dojo, who.country].filter(Boolean).join(' · '))}</small></td><td>${r.wins}</td><td>${r.draws}</td><td>${r.losses}</td>${team ? `<td>${r.boutWins}</td>` : ''}<td>${r.ipponsScored}</td><td>${r.ipponsConceded}</td></tr>`
+          return `<tr class="${r.rank <= t.advancePerPool ? 'q' : ''}"><td>${r.rank}</td><td>${esc(who.name)}${out}<small>${esc([who.dojo !== who.name ? who.dojo : '', who.country].filter(Boolean).join(' · '))}</small></td><td>${r.wins}</td><td>${r.draws}</td><td>${r.losses}</td>${team ? `<td>${r.boutWins}</td>` : ''}<td>${r.ipponsScored}</td><td>${r.ipponsConceded}</td></tr>`
         })
         .join('')
       return `<div class="pool"><h3>${esc(pool.name)}</h3><table><tr><th>#</th><th>${team ? 'Team' : 'Player'}</th><th>W</th><th>D</th><th>L</th>${team ? '<th>Bouts</th>' : ''}<th>IS</th><th>IC</th></tr>${rows}</table></div>`
@@ -148,7 +148,7 @@ export function reportHtml(t: Tournament): string {
   const final = podium(t)
     .map(({ place, entrantId }) => {
       const who = describeEntrant(t, entrantId)
-      return `<tr><td class="p">${PLACE[place]}</td><td><b>${esc(who.name)}</b></td><td>${esc(who.dojo)}</td><td>${esc(who.country ?? '')}</td></tr>`
+      return `<tr><td class="p">${PLACE[place]}</td><td><b>${esc(who.name)}</b></td><td>${esc(who.dojo !== who.name ? who.dojo : '')}</td><td>${esc(who.country ?? '')}</td></tr>`
     })
     .join('')
   const matches = t.matchQueue.map((id) => t.matches[id]).filter((m): m is Match => Boolean(m))

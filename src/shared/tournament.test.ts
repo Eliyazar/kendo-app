@@ -160,7 +160,7 @@ describe('team tournament', () => {
     const t0 = Object.values(tour(s).teams).find((t) => t.name === 'Team 0')!
     expect(t0.order).toHaveLength(3)
     expect(t0.order[2]).toBeNull()
-    expect(t0.pin).toMatch(/^\d{4}$/)
+    expect(t0.pin).toMatch(/^\d{6}$/)
     expect(Object.keys(tour(s).teamMatches)).toHaveLength(2)
 
     // Pools: first bout aka wins (fusen-gachi if a player is missing), rest drawn.

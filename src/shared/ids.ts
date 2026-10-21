@@ -22,5 +22,5 @@ export function shuffle<T>(items: readonly T[], random: () => number): T[] {
   return out
 }
 
-/** Random 4-digit captain PIN. */
-export const newPin = (): string => String(globalThis.crypto.getRandomValues(new Uint32Array(1))[0]! % 10_000).padStart(4, '0')
+/** Random 6-digit captain PIN. */
+export const newPin = (): string => String(globalThis.crypto.getRandomValues(new Uint32Array(1))[0]! % 1_000_000).padStart(6, '0')
