@@ -18,7 +18,7 @@ function nodeScore(t: Tournament, node: BracketNode): { aka: string; shiro: stri
   return {
     aka: m.result ? `${m.result.akaIppons}${mark('aka')}` : '',
     shiro: m.result ? `${m.result.shiroIppons}${mark('shiro')}` : '',
-    live: m.status === 'in-progress' || m.status === 'awaiting-confirmation' || t.activeMatchId === m.id
+    live: m.status === 'in-progress' || m.status === 'awaiting-confirmation' || t.courts.some((c) => c.activeMatchId === m.id)
   }
 }
 

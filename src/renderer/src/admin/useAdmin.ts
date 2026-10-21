@@ -6,6 +6,7 @@ export interface AdminApi {
   /** Main-process time, interpolated locally between snapshots. */
   now: () => number
   send: (action: AdminAction) => Promise<boolean>
+  saveSettings: (patch: unknown) => Promise<boolean>
   error: string | null
   clearError: () => void
 }
@@ -38,9 +39,15 @@ export function useAdmin(): AdminApi {
     return r.ok
   }, [])
 
+  const saveSettings = useCallback(async (patch: unknown): Promise<boolean> => {
+    const r = await window.kendoAdmin.setSettings(patch)
+    setError(r.ok ? null : r.error)
+    return r.ok
+  }, [])
+
   const now = useCallback(() => Date.now() + offset.current, [])
 
-  return { snap, now, send, error, clearError: () => setError(null) }
+  return { snap, now, send, saveSettings, error, clearError: () => setError(null) }
 }
 
 /** Re-render on an interval (used for the running clock). */

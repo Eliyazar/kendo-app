@@ -21,6 +21,7 @@ const emptyDraft = (): Draft => ({
   advancePerPool: 2,
   poolMatchMinutes: 3,
   bracketMatchMinutes: 3,
+  courts: 1,
   entrants: []
 })
 
@@ -68,8 +69,15 @@ export function SetupScreen({ send, devMode }: { send: (a: AdminAction) => Promi
   }, [draft])
 
   const team = draft.mode === 'team'
-  const check = useMemo(() => validateSetup({ ...draft, drawSeed: 1 }), [draft])
-  const entrantCount = team ? new Set(draft.entrants.map((e) => e.team ?? '')).size : draft.entrants.length
+  // Check-in: once anyone is marked present, only present entrants go into the draw.
+  const checkIn = draft.entrants.some((e) => e.present)
+  const presentCount = draft.entrants.filter((e) => e.present).length
+  const inDraw = useMemo(
+    () => (checkIn ? draft.entrants.filter((e) => e.present) : draft.entrants).map(({ present: _p, ...e }) => e),
+    [draft.entrants, checkIn]
+  )
+  const check = useMemo(() => validateSetup({ ...draft, entrants: inDraw, drawSeed: 1 }), [draft, inDraw])
+  const entrantCount = team ? new Set(inDraw.map((e) => e.team ?? '')).size : inDraw.length
   const pools = poolCount(entrantCount, draft.poolSize)
   const sizes = [Math.floor(entrantCount / pools), Math.ceil(entrantCount / pools)]
 
@@ -93,7 +101,7 @@ export function SetupScreen({ send, devMode }: { send: (a: AdminAction) => Promi
   }
 
   const create = async (): Promise<void> => {
-    const ok = await send({ type: 'CREATE_TOURNAMENT', setup: { ...draft, drawSeed: Math.floor(Math.random() * 2 ** 31) } })
+    const ok = await send({ type: 'CREATE_TOURNAMENT', setup: { ...draft, entrants: inDraw, drawSeed: Math.floor(Math.random() * 2 ** 31) } })
     if (ok) {
       try {
         localStorage.removeItem(DRAFT_KEY)
@@ -153,6 +161,7 @@ export function SetupScreen({ send, devMode }: { send: (a: AdminAction) => Promi
           <Num label="Qualifiers / pool" value={draft.advancePerPool} min={1} max={4} onChange={(n) => set('advancePerPool', n)} />
           <Num label="Pool match (min)" value={draft.poolMatchMinutes} min={0.5} max={15} step={0.5} onChange={(n) => set('poolMatchMinutes', n)} />
           <Num label="Bracket match (min)" value={draft.bracketMatchMinutes} min={0.5} max={15} step={0.5} onChange={(n) => set('bracketMatchMinutes', n)} />
+          <Num label="Courts (shiai-jo)" value={draft.courts} min={1} max={4} onChange={(n) => set('courts', n)} />
         </div>
 
         <div className="rounded-xl bg-white/5 p-3 text-sm text-white/70">
@@ -184,6 +193,19 @@ export function SetupScreen({ send, devMode }: { send: (a: AdminAction) => Promi
           <h2 className="text-lg font-bold">
             Participants <span className="text-white/40">({draft.entrants.length})</span>
           </h2>
+          {draft.entrants.length > 0 && (
+            <div className="flex items-center gap-2 text-sm">
+              <span className={checkIn ? 'font-semibold text-ok' : 'text-muted'}>
+                {checkIn ? `Check-in: ${presentCount} here, ${draft.entrants.length - presentCount} absent (left out of the draw)` : 'Check-in: tick who has arrived'}
+              </span>
+              <button
+                onClick={() => set('entrants', draft.entrants.map((e) => ({ ...e, present: !checkIn })))}
+                className="rounded-md px-2 py-1 text-xs font-semibold text-muted hover:bg-neutral-800 hover:text-white"
+              >
+                {checkIn ? 'Clear' : 'All here'}
+              </button>
+            </div>
+          )}
           <div className="flex-1" />
           {devMode && (
             <button
@@ -231,8 +253,10 @@ export function SetupScreen({ send, devMode }: { send: (a: AdminAction) => Promi
               <thead className="sticky top-0 bg-neutral-900 text-left text-xs tracking-widest text-white/40 uppercase">
                 <tr>
                   <th className="w-10 px-4 py-2">#</th>
+                  <th className="w-16 px-2 py-2" title="Check-in: tick everyone who has arrived">Here</th>
                   <th className="px-2 py-2">Name</th>
                   <th className="px-2 py-2">Dojo / Club</th>
+                  <th className="w-24 px-2 py-2">Country</th>
                   {team && <th className="px-2 py-2">Team</th>}
                   <th className="w-24 px-2 py-2">Grade</th>
                   <th className="w-16 px-2 py-2">Seed</th>
@@ -243,7 +267,15 @@ export function SetupScreen({ send, devMode }: { send: (a: AdminAction) => Promi
                 {draft.entrants.map((e, i) => (
                   <tr key={i} className="border-t border-white/5">
                     <td className="px-4 text-white/40">{i + 1}</td>
-                    {(['name', 'dojo', ...(team ? ['team'] : []), 'grade'] as const).map((k) => (
+                    <td className="px-2">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 accent-emerald-500"
+                        checked={Boolean(e.present)}
+                        onChange={(ev) => updateEntrant(i, { present: ev.target.checked })}
+                      />
+                    </td>
+                    {(['name', 'dojo', 'country', ...(team ? ['team'] : []), 'grade'] as const).map((k) => (
                       <td key={k} className="px-1 py-1">
                         <input
                           className="w-full rounded bg-transparent px-2 py-1 outline-none hover:bg-white/5 focus:bg-neutral-800"

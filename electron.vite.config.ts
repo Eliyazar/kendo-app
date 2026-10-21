@@ -30,7 +30,8 @@ export default defineConfig({
       rollupOptions: {
         input: {
           admin: resolve('src/renderer/admin.html'),
-          public: resolve('src/renderer/public.html')
+          public: resolve('src/renderer/public.html'),
+          overlay: resolve('src/renderer/overlay.html')
         }
       }
     }

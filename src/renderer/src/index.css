@@ -1,14 +1,27 @@
 @import 'tailwindcss';
+@import '@fontsource-variable/inter';
+@import '@fontsource/barlow-condensed/600.css';
+@import '@fontsource/barlow-condensed/700.css';
 
 @theme {
-  --color-aka: #c8102e;
-  --color-aka-deep: #8f0b20;
-  --color-shiro: #f4f4f2;
-  --color-hansoku: #facc15;
-  --color-ink: #0b0b0c;
+  /* Broadcast palette: shared by the TV, the stream overlay and the online page. */
+  --color-ink: #0b0d12;
+  --color-surface: #141821;
+  --color-surface-2: #1c212c;
+  --color-line: rgb(255 255 255 / 0.08);
+  --color-muted: #8a93a6;
+  --color-aka: #e0303f;
+  --color-aka-deep: #9e1626;
+  --color-shiro: #f2f2ee;
+  --color-hansoku: #f6c445;
+  --color-ok: #2bb673;
+
+  --font-sans: 'Inter Variable', 'Segoe UI', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'Barlow Condensed', 'Arial Narrow', 'Segoe UI', sans-serif;
 
   --animate-flash: flash 0.5s steps(1, end) infinite;
   --animate-pop: pop 0.25s ease-out;
+  --animate-rise: rise 0.35s ease-out;
 
   @keyframes flash {
     0% {
@@ -29,6 +42,17 @@
       opacity: 1;
     }
   }
+
+  @keyframes rise {
+    0% {
+      transform: translateY(24px);
+      opacity: 0;
+    }
+    100% {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  }
 }
 
 html,
@@ -44,10 +68,16 @@ body,
 body {
   margin: 0;
   background: var(--color-ink);
-  color: #f5f5f5;
-  font-family: 'Segoe UI', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  color: #f4f5f7;
+  font-family: var(--font-sans);
   user-select: none;
   -webkit-font-smoothing: antialiased;
+}
+
+/* The stream overlay is composited over the camera picture in OBS. */
+html.overlay,
+html.overlay body {
+  background: transparent;
 }
 
 button {
@@ -60,4 +90,10 @@ button:disabled {
 
 .tabular {
   font-variant-numeric: tabular-nums;
+}
+
+.display {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
 }

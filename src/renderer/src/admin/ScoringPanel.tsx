@@ -41,7 +41,7 @@ export function ScoringPanel({ side, competitor: c, scoring, canFusen, send }: P
         </div>
         <div className="flex items-center gap-2">
           {c.marks.map((m, i) => (
-            <MarkBadge key={i} mark={m} size={44} tone={aka ? 'light' : 'dark'} />
+            <MarkBadge key={i} mark={m} size={44} variant="outline" tone={aka ? 'light' : 'dark'} />
           ))}
           <span className="tabular ml-2 text-4xl font-black">{c.ippons}</span>
         </div>
