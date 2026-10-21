@@ -1,7 +1,9 @@
+import { join } from 'node:path'
 import { app, BrowserWindow, Menu } from 'electron'
+import { AppContext } from './context'
+import { parseAdminAction, registerIpc, type WindowRefs } from './ipc'
 import { StateFile } from './persistence'
-import { Store } from './store'
-import { broadcast, registerIpc, type WindowRefs } from './ipc'
+import { SettingsFile } from './settings'
 import { createAdminWindow, createPublicWindow } from './windows'
 
 let adminWindow: BrowserWindow | null = null
@@ -58,11 +60,18 @@ if (!app.requestSingleInstanceLock()) {
     }
   })
 
-  app.whenReady().then(() => {
-    const file = new StateFile(app.getPath('userData'))
-    const store: Store = new Store(file, () => broadcast(store, windows))
-    registerIpc(store, windows, !app.isPackaged)
-    store.start()
+  app.whenReady().then(async () => {
+    const dir = app.getPath('userData')
+    const ctx = new AppContext(
+      new StateFile(dir),
+      new SettingsFile(dir),
+      windows,
+      !app.isPackaged,
+      { rendererDir: join(__dirname, '../renderer'), devUrl: process.env['ELECTRON_RENDERER_URL'] },
+      parseAdminAction
+    )
+    registerIpc(ctx, windows)
+    await ctx.start()
 
     buildMenu()
     adminWindow = createAdminWindow()
@@ -77,7 +86,7 @@ if (!app.requestSingleInstanceLock()) {
       if (BrowserWindow.getAllWindows().length === 0) adminWindow = createAdminWindow()
     })
 
-    app.on('before-quit', () => store.stop())
+    app.on('before-quit', () => ctx.stop())
   })
 
   app.on('window-all-closed', () => app.quit())

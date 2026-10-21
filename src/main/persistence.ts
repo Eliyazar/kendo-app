@@ -30,12 +30,13 @@ export interface LoadResult {
  */
 function freezeTimers(state: AppState, now: number): AppState {
   const t = state.tournament
-  const m = t?.activeMatchId ? t.matches[t.activeMatchId] : undefined
-  if (!t || !m || m.timer.runningSince === null) return state
-  return {
-    ...state,
-    tournament: { ...t, matches: { ...t.matches, [m.id]: { ...m, timer: pauseTimer(m.timer, now) } } }
+  if (!t) return state
+  const matches = { ...t.matches }
+  for (const court of t.courts) {
+    const m = court.activeMatchId ? matches[court.activeMatchId] : undefined
+    if (m && m.timer.runningSince !== null) matches[m.id] = { ...m, timer: pauseTimer(m.timer, now) }
   }
+  return { ...state, tournament: { ...t, matches } }
 }
 
 export class StateFile {
