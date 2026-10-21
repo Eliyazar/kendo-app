@@ -2,13 +2,19 @@
 // Deliberately contains NO clock information (anti-stalling rule):
 // the public screen only learns that time is up, never how much is left.
 
+import { activeMatchOn, courtOf, nextScheduledOn } from './courts'
 import { tallyEncounter } from './encounters'
 import { computeScore, pendingResult, type ScoreMark } from './match-engine'
 import { TEAM_POSITIONS, type AppState, type Competitor, type Match, type MatchStatus, type Side, type Tournament } from './types'
 
-export interface PublicCompetitor {
+/** Who is fighting: name plus dojo (or team) and IOC country code. */
+export interface Person {
   name: string
   dojo: string
+  country?: string
+}
+
+export interface PublicCompetitor extends Person {
   marks: ScoreMark[]
   ippons: number
   hansoku: number
@@ -39,41 +45,40 @@ export interface PublicMatch {
 }
 
 export interface PublicMatchup {
-  aka: { name: string; dojo: string }
-  shiro: { name: string; dojo: string }
+  aka: Person
+  shiro: Person
 }
 
 export interface PublicView {
   tournamentName: string | null
+  /** Court this view belongs to, e.g. "Shiai-jo A". Null without a tournament. */
+  courtName: string | null
+  /** More than one court: show the court name on screen. */
+  multiCourt: boolean
   match: PublicMatch | null
   team: PublicTeamScore | null
   nextMatch: PublicMatchup | null
   /** Set once the bracket final is decided and the board is empty. */
-  champion: { name: string; dojo: string } | null
+  champion: Person | null
 }
 
-export function describeCompetitor(t: Tournament, c: Competitor): { name: string; dojo: string } {
+const person = (name: string, dojo: string, country?: string): Person => (country ? { name, dojo, country } : { name, dojo })
+
+/** In team bouts the second line shows the team, otherwise the dojo. */
+export function describeCompetitor(t: Tournament, c: Competitor): Person {
   const player = c.playerId ? t.players[c.playerId] : undefined
-  if (player) return { name: player.name, dojo: player.dojo }
   const team = c.teamId ? t.teams[c.teamId] : undefined
-  return { name: '—', dojo: team?.name ?? '' }
+  if (player) return person(player.name, team?.name ?? player.dojo, player.country ?? team?.country)
+  return person('—', team?.name ?? '', team?.country)
 }
 
 /** Pool / bracket entrant: a player, or a team in team mode. */
-export function describeEntrant(t: Tournament, id: string | null): { name: string; dojo: string } {
+export function describeEntrant(t: Tournament, id: string | null): Person {
   if (!id) return { name: '—', dojo: '' }
   const team = t.teams[id]
-  if (team) return { name: team.name, dojo: team.dojo }
+  if (team) return person(team.name, team.dojo, team.country)
   const p = t.players[id]
-  return p ? { name: p.name, dojo: p.dojo } : { name: '—', dojo: '' }
-}
-
-export function nextScheduledMatch(t: Tournament): Match | null {
-  for (const id of t.matchQueue) {
-    const m = t.matches[id]
-    if (m && m.status === 'scheduled' && id !== t.activeMatchId) return m
-  }
-  return null
+  return p ? person(p.name, p.dojo, p.country) : { name: '—', dojo: '' }
 }
 
 function teamScore(t: Tournament, m: Match): PublicTeamScore | null {
@@ -110,24 +115,27 @@ export function matchLabel(t: Tournament, m: Match): string {
   return roundName(node.round, t.bracket.rounds)
 }
 
-export function champion(t: Tournament): { name: string; dojo: string } | null {
+export function champion(t: Tournament): Person | null {
   const final = t.bracket ? Object.values(t.bracket.nodes).find((n) => !n.next) : undefined
   return final?.winnerEntrantId ? describeEntrant(t, final.winnerEntrantId) : null
 }
 
-export function toPublicView(state: AppState): PublicView {
+/** What one court's scoreboard shows. Without `courtId`: the first court. */
+export function toPublicView(state: AppState, courtId?: string): PublicView {
   const t = state.tournament
-  if (!t) return { tournamentName: null, match: null, team: null, nextMatch: null, champion: null }
+  if (!t) return { tournamentName: null, courtName: null, multiCourt: false, match: null, team: null, nextMatch: null, champion: null }
 
-  const m = t.activeMatchId ? t.matches[t.activeMatchId] : undefined
-  const next = nextScheduledMatch(t)
+  const court = courtOf(t, t.courts.some((c) => c.id === courtId) ? courtId : undefined)
+  const base = { tournamentName: t.name, courtName: court.name, multiCourt: t.courts.length > 1 }
+  const m = activeMatchOn(t, court.id)
+  const next = nextScheduledOn(t, court.id)
   const nextMatch = next ? { aka: describeCompetitor(t, next.aka), shiro: describeCompetitor(t, next.shiro) } : null
-  if (!m) return { tournamentName: t.name, match: null, team: null, nextMatch, champion: champion(t) }
+  if (!m) return { ...base, match: null, team: null, nextMatch, champion: champion(t) }
 
   const score = computeScore(m.events)
   const over = m.status === 'awaiting-confirmation' || m.status === 'completed'
   return {
-    tournamentName: t.name,
+    ...base,
     champion: null,
     match: {
       id: m.id,

@@ -1,6 +1,7 @@
 // Single-elimination bracket built from the pool qualifiers.
 
-import { createMeeting, enqueue } from './encounters'
+import { courtFor } from './courts'
+import { createMeeting, encounterOpen, enqueue, isWithdrawn } from './encounters'
 import { uid } from './ids'
 import { computeStandings } from './standings'
 import type { Bracket, BracketNode, Id, Side, Tournament } from './types'
@@ -26,8 +27,10 @@ export interface Qualifier {
 export function qualifiers(t: Tournament): Qualifier[] {
   const out: Qualifier[] = []
   const tables = t.pools.map((p) => computeStandings(t, p))
+  // Withdrawn entrants never qualify; the next in line moves up.
+  const eligible = tables.map((table) => table.filter((row) => !isWithdrawn(t, row.entrantId)))
   for (let place = 1; place <= t.advancePerPool; place++) {
-    tables.forEach((table, poolIndex) => {
+    eligible.forEach((table, poolIndex) => {
       const row = table[place - 1]
       if (row) out.push({ entrantId: row.entrantId, poolIndex, place })
     })
@@ -63,10 +66,15 @@ export function assignSeeds(qs: Qualifier[], size: number): Map<number, Id> {
   return seeds
 }
 
-/** Create a match for a node once both sides are known; queue it. */
+/** Final on the first court; earlier rounds spread over all courts. */
+const courtForNode = (t: Tournament, node: BracketNode): Id => (node.next ? courtFor(t, node.slot) : t.courts[0]!.id)
+
+/** Create a match for a node once both sides are known; queue it. A withdrawn side is a walkover. */
 function scheduleNode(t: Tournament, node: BracketNode): Tournament {
-  if (!node.akaEntrantId || !node.shiroEntrantId || node.matchId) return t
-  const s = createMeeting(t, 'bracket', node.akaEntrantId, node.shiroEntrantId, { bracketNodeId: node.id })
+  if (!node.akaEntrantId || !node.shiroEntrantId || node.matchId || node.winnerEntrantId) return t
+  if (isWithdrawn(t, node.akaEntrantId)) return advance(t, node.id, node.shiroEntrantId)
+  if (isWithdrawn(t, node.shiroEntrantId)) return advance(t, node.id, node.akaEntrantId)
+  const s = createMeeting(t, 'bracket', node.akaEntrantId, node.shiroEntrantId, { bracketNodeId: node.id, courtId: courtForNode(t, node) })
   const bracket = t.bracket!
   return enqueue(
     {
@@ -88,6 +96,57 @@ export function advance(t: Tournament, nodeId: Id, winner: Id): Tournament {
   const filled: BracketNode = { ...target, [node.next.side === 'aka' ? 'akaEntrantId' : 'shiroEntrantId']: winner }
   nodes = { ...nodes, [filled.id]: filled }
   return scheduleNode({ ...t, bracket: { ...bracket, nodes } }, filled)
+}
+
+/** The meeting at a node has not started (so it can still be replaced). */
+function nodeMeetingOpen(t: Tournament, node: BracketNode): boolean {
+  if (!node.matchId) return true
+  const tm = t.teamMatches[node.matchId]
+  if (tm) return encounterOpen(t, tm)
+  const m = t.matches[node.matchId]
+  return !m || (m.status === 'scheduled' && m.events.length === 0 && m.timer.elapsedMs === 0 && m.timer.runningSince === null)
+}
+
+/** Remove a node's (unstarted) meeting from the tournament. */
+function dropNodeMeeting(t: Tournament, node: BracketNode): Tournament {
+  if (!node.matchId) return t
+  const tm = t.teamMatches[node.matchId]
+  const ids = new Set(tm ? [...tm.boutIds, ...(tm.daihyoMatchId ? [tm.daihyoMatchId] : [])] : [node.matchId])
+  const matches = Object.fromEntries(Object.entries(t.matches).filter(([id]) => !ids.has(id)))
+  const teamMatches = tm ? Object.fromEntries(Object.entries(t.teamMatches).filter(([id]) => id !== tm.id)) : t.teamMatches
+  return {
+    ...t,
+    matches,
+    teamMatches,
+    matchQueue: t.matchQueue.filter((id) => !ids.has(id)),
+    courts: t.courts.map((c) => (c.activeMatchId && ids.has(c.activeMatchId) ? { ...c, activeMatchId: null } : c))
+  }
+}
+
+export class BracketError extends Error {}
+
+/**
+ * Change who won a node after a result was corrected. Allowed only while the
+ * next round's meeting has not started; that meeting is rebuilt with the new winner.
+ * `winner` null = the node is undecided again (e.g. a daihyo-sen is now needed).
+ */
+export function replaceWinner(t: Tournament, nodeId: Id, winner: Id | null): Tournament {
+  const node = t.bracket?.nodes[nodeId]
+  if (!t.bracket || !node || node.winnerEntrantId === winner) return t
+  if (!node.next) {
+    const nodes = { ...t.bracket.nodes, [node.id]: { ...node, winnerEntrantId: winner } }
+    return { ...t, bracket: { ...t.bracket, nodes }, phase: winner ? 'finished' : 'bracket' }
+  }
+  const target = t.bracket.nodes[node.next.nodeId]!
+  if (target.winnerEntrantId || !nodeMeetingOpen(t, target)) {
+    throw new BracketError('The next round has already been fought; this result can no longer change who advances.')
+  }
+  t = dropNodeMeeting(t, target)
+  const key = node.next.side === 'aka' ? 'akaEntrantId' : 'shiroEntrantId'
+  const cleared: BracketNode = { ...target, [key]: null, matchId: null }
+  const bracket = t.bracket!
+  t = { ...t, phase: 'bracket', bracket: { ...bracket, nodes: { ...bracket.nodes, [node.id]: { ...node, winnerEntrantId: null }, [cleared.id]: cleared } } }
+  return winner ? advance(t, node.id, winner) : t
 }
 
 export function buildBracket(t: Tournament): Tournament {

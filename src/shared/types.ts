@@ -33,20 +33,41 @@ export interface Player {
   id: Id
   name: string
   dojo: string
+  /** IOC country code, e.g. "BUL". */
+  country?: string
   /** Set when the player belongs to a team (team mode). */
   teamId?: Id
   /** Optional seeding / grade information from the import file. */
   seed?: number
   grade?: string
+  /** Withdrew after the draw (individual mode): remaining matches are kiken. */
+  withdrawn?: boolean
 }
+
+/** Up to this many reserves beyond the team size. */
+export const MAX_RESERVES = 2
 
 export interface Team {
   id: Id
   name: string
   dojo: string
+  country?: string
   size: TeamSize
-  /** Player ids in position order. `null` = position left empty (missing player). */
-  roster: (Id | null)[]
+  /** Every registered member, including reserves. */
+  members: Id[]
+  /** Default fighting order: one entry per position; `null` = empty position (fusen-gachi). */
+  order: (Id | null)[]
+  /** Captain PIN for submitting the team order from a phone. Never published. */
+  pin: string
+  withdrawn?: boolean
+}
+
+export interface Court {
+  id: Id
+  /** e.g. "Shiai-jo A" */
+  name: string
+  /** The match currently loaded on this court's scoreboard. */
+  activeMatchId: Id | null
 }
 
 // ---------------------------------------------------------------------------
@@ -129,7 +150,8 @@ export type MatchStatus =
 
 export type MatchEndReason = 'ippon' | 'time-up' | 'encho-ippon' | 'fusen-gachi'
 
-export type MatchDecision = 'ippon' | 'time' | 'encho' | 'fusen-gachi' | 'hikiwake'
+/** kiken = opponent withdrew (injury, no-show after the draw). */
+export type MatchDecision = 'ippon' | 'time' | 'encho' | 'fusen-gachi' | 'kiken' | 'hikiwake'
 
 export interface MatchConfig {
   durationMs: number
@@ -154,11 +176,15 @@ export interface MatchResult {
   akaHansoku: number
   shiroHansoku: number
   approvedAt: Timestamp
+  /** Set when the table corrected the result after approval. */
+  editedAt?: Timestamp
 }
 
 export interface Match {
   id: Id
   kind: MatchKind
+  /** Court (shiai-jo) this match is fought on. */
+  courtId: Id
   aka: Competitor
   shiro: Competitor
   config: MatchConfig
@@ -189,12 +215,15 @@ export interface Match {
 export interface TeamMatch {
   id: Id
   kind: MatchKind
+  courtId: Id
   akaTeamId: Id
   shiroTeamId: Id
   /** Bout match ids in position order. */
   boutIds: Id[]
   /** Representative bout added when a bracket encounter ends level. */
   daihyoMatchId?: Id
+  /** Side whose order was set explicitly for this encounter (by the table or the captain). */
+  lineupSet?: Partial<Record<Side, boolean>>
   status: 'scheduled' | 'in-progress' | 'completed'
   poolId?: Id
   bracketNodeId?: Id
@@ -263,10 +292,9 @@ export interface Tournament {
   teamMatches: Record<Id, TeamMatch>
   bracket: Bracket | null
 
-  /** Fight order on the shiai-jo. Match ids (individual bouts, incl. team bouts). */
+  courts: Court[]
+  /** Fight order. Match ids (individual bouts, incl. team bouts); each court takes its own in this order. */
   matchQueue: Id[]
-  /** The match currently loaded on the scoreboard. */
-  activeMatchId: Id | null
 
   createdAt: Timestamp
   updatedAt: Timestamp
@@ -276,7 +304,7 @@ export interface Tournament {
 // Persisted application state
 // ---------------------------------------------------------------------------
 
-export const SCHEMA_VERSION = 2
+export const SCHEMA_VERSION = 3
 
 export interface AppState {
   schemaVersion: number

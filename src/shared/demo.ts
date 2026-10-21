@@ -23,6 +23,7 @@ export function createDemoSetup(now: number): TournamentSetup {
     advancePerPool: 2,
     poolMatchMinutes: 3,
     bracketMatchMinutes: 3,
+    courts: 1,
     entrants: PLAYERS.map(([name, dojo]) => ({ name, dojo })),
     drawSeed: 7
   }

@@ -160,6 +160,41 @@ export function pendingResult(match: Match): PendingResult {
   return { winner, decision, needsEncho: false, score }
 }
 
+/** Build the stored result from the match's events (used on approve and on corrections). */
+export function resultOf(m: Match, now: number): MatchResult {
+  const r = pendingResult(m)
+  return {
+    winner: r.winner,
+    decision: r.decision,
+    akaIppons: r.score.aka.ippons,
+    shiroIppons: r.score.shiro.ippons,
+    akaHansoku: r.score.aka.hansoku,
+    shiroHansoku: r.score.shiro.hansoku,
+    approvedAt: now
+  }
+}
+
+/**
+ * Kiken: one side withdraws (injury, absence after the draw). The opponent wins
+ * with two ippons; points already scored by the withdrawing side stand.
+ */
+export function kiken(m: Match, winner: Side, now: number): Match {
+  const s = computeScore(m.events)
+  const loser = opponent(winner)
+  const ippons = { [winner]: 2, [loser]: Math.min(s[loser].ippons, 1) } as Record<Side, number>
+  const result: MatchResult = {
+    winner,
+    decision: 'kiken',
+    akaIppons: ippons.aka,
+    shiroIppons: ippons.shiro,
+    akaHansoku: s.aka.hansoku,
+    shiroHansoku: s.shiro.hansoku,
+    approvedAt: now
+  }
+  const { endReason: _e, ...rest } = m
+  return { ...rest, status: 'completed', timer: pauseTimer(m.timer, now), result }
+}
+
 // ---------------------------------------------------------------------------
 // Reducer
 // ---------------------------------------------------------------------------
@@ -286,16 +321,7 @@ export function reduceMatch(m: Match, action: MatchAction, now: number): Match {
       if (m.status !== 'awaiting-confirmation') throw new RuleError('Match has not ended yet.')
       const r = pendingResult(m)
       if (r.needsEncho) throw new RuleError('Drawn elimination match: start Encho.')
-      const result: MatchResult = {
-        winner: r.winner,
-        decision: r.decision,
-        akaIppons: r.score.aka.ippons,
-        shiroIppons: r.score.shiro.ippons,
-        akaHansoku: r.score.aka.hansoku,
-        shiroHansoku: r.score.shiro.hansoku,
-        approvedAt: now
-      }
-      return { ...m, status: 'completed', result }
+      return { ...m, status: 'completed', result: resultOf(m, now) }
     }
   }
 }

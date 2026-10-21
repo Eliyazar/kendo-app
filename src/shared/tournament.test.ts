@@ -12,7 +12,8 @@ function act(s: AppState, a: AdminAction | { type: 'TICK' }): AppState {
   return reduceApp(s, a, clock).state
 }
 const tour = (s: AppState): Tournament => s.tournament!
-const active = (s: AppState) => tour(s).matches[tour(s).activeMatchId!]!
+const activeId = (s: AppState) => tour(s).courts[0]!.activeMatchId
+const active = (s: AppState) => tour(s).matches[activeId(s)!]!
 
 /** Finish the active match: 'aka' / 'shiro' win by ippon, 'draw' runs out the clock. */
 function play(s: AppState, outcome: Side | 'draw'): AppState {
@@ -36,6 +37,7 @@ const setup = (over: Partial<TournamentSetup>): TournamentSetup => ({
   advancePerPool: 2,
   poolMatchMinutes: 3,
   bracketMatchMinutes: 3,
+  courts: 1,
   entrants: [],
   drawSeed: 1,
   ...over
@@ -93,14 +95,14 @@ describe('individual tournament', () => {
     expect(() => reduceApp(s, { type: 'LOCK_POOLS' }, clock)).toThrow(/Finish all pool/)
 
     // Aka always wins: produces a clear 1st/2nd/3rd in each pool of three.
-    while (tour(s).activeMatchId) s = play(s, 'aka')
+    while (activeId(s)) s = play(s, 'aka')
     expect(poolsComplete(tour(s))).toBe(true)
 
     const ties = unresolvedTies(tour(s))
     for (const tie of ties) {
       s = act(s, { type: 'GENERATE_TIE_BREAKER', poolId: tie.poolId, entrantIds: tie.entrantIds })
       // The first tied fighter wins all their tie-breakers, which settles the order.
-      while (tour(s).activeMatchId) s = play(s, active(s).shiro.playerId === tie.entrantIds[0] ? 'shiro' : 'aka')
+      while (activeId(s)) s = play(s, active(s).shiro.playerId === tie.entrantIds[0] ? 'shiro' : 'aka')
     }
     expect(unresolvedTies(tour(s))).toEqual([])
 
@@ -109,7 +111,7 @@ describe('individual tournament', () => {
     expect(tour(s).bracket!.rounds).toBe(3) // 6 qualifiers -> 8-slot bracket, 2 byes
 
     let guard = 0
-    while (tour(s).activeMatchId && guard++ < 20) s = play(s, 'shiro')
+    while (activeId(s) && guard++ < 20) s = play(s, 'shiro')
     expect(tour(s).phase).toBe('finished')
     const final = Object.values(tour(s).bracket!.nodes).find((n) => !n.next)!
     expect(final.winnerEntrantId).toBeTruthy()
@@ -118,7 +120,7 @@ describe('individual tournament', () => {
   it('flags a three-way tie and resolves it with tie-breakers', () => {
     let s = act(initialState(), { type: 'CREATE_TOURNAMENT', setup: setup({ entrants: players(3), advancePerPool: 1 }) })
     // Circle of wins: every player 1 win, 2 ippons scored, 2 conceded.
-    while (tour(s).activeMatchId) s = play(s, 'aka')
+    while (activeId(s)) s = play(s, 'aka')
     const [tie] = unresolvedTies(tour(s))
     expect(tie?.entrantIds).toHaveLength(3)
     expect(() => reduceApp(s, { type: 'LOCK_POOLS' }, clock)).toThrow(/ties/)
@@ -156,12 +158,13 @@ describe('team tournament', () => {
       }
     )
     const t0 = Object.values(tour(s).teams).find((t) => t.name === 'Team 0')!
-    expect(t0.roster).toHaveLength(3)
-    expect(t0.roster[2]).toBeNull()
+    expect(t0.order).toHaveLength(3)
+    expect(t0.order[2]).toBeNull()
+    expect(t0.pin).toMatch(/^\d{4}$/)
     expect(Object.keys(tour(s).teamMatches)).toHaveLength(2)
 
     // Pools: first bout aka wins (fusen-gachi if a player is missing), rest drawn.
-    while (tour(s).activeMatchId) {
+    while (activeId(s)) {
       const m = active(s)
       if (m.position === 0 || !m.aka.playerId || !m.shiro.playerId) {
         const side: Side = m.aka.playerId ? 'aka' : 'shiro'
@@ -179,8 +182,8 @@ describe('team tournament', () => {
     expect(() => reduceApp(s, { type: 'TIMER_START' }, clock)).toThrow(/representatives/)
 
     const tm = tour(s).teamMatches[daihyo.teamMatchId!]!
-    s = act(s, { type: 'SET_REPRESENTATIVE', side: 'aka', playerId: tour(s).teams[tm.akaTeamId]!.roster[0]! })
-    s = act(s, { type: 'SET_REPRESENTATIVE', side: 'shiro', playerId: tour(s).teams[tm.shiroTeamId]!.roster[0]! })
+    s = act(s, { type: 'SET_REPRESENTATIVE', side: 'aka', playerId: tour(s).teams[tm.akaTeamId]!.members[0]! })
+    s = act(s, { type: 'SET_REPRESENTATIVE', side: 'shiro', playerId: tour(s).teams[tm.shiroTeamId]!.members[0]! })
     s = act(s, { type: 'ADD_IPPON', side: 'shiro', technique: 'M' })
     s = act(s, { type: 'APPROVE_MATCH' })
     expect(tour(s).teamMatches[tm.id]!.result?.winner).toBe('shiro')

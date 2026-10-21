@@ -1,9 +1,15 @@
 // Turns the rows of an imported CSV / Excel sheet into participant entries.
 // Pure function: file reading happens in the main process (src/main/import.ts).
 
+import { toIocCode } from './countries'
+
 export interface ImportedEntrant {
   name: string
   dojo: string
+  /** IOC country code, e.g. "BUL". */
+  country?: string
+  /** Checked in on the day (setup screen). */
+  present?: boolean
   /** Team name (team tournaments). Players with the same team name form one team, in file order. */
   team?: string
   grade?: string
@@ -15,13 +21,14 @@ export interface ParseResult {
   warnings: string[]
 }
 
-type Column = 'name' | 'first' | 'last' | 'dojo' | 'team' | 'grade' | 'seed'
+type Column = 'name' | 'first' | 'last' | 'dojo' | 'country' | 'team' | 'grade' | 'seed'
 
 const ALIASES: Record<Column, string[]> = {
   name: ['name', 'player', 'full name', 'fullname', 'competitor', 'participant', 'kendoka', 'nom'],
   first: ['first name', 'firstname', 'given name', 'forename', 'vorname', 'prénom', 'prenom'],
   last: ['last name', 'lastname', 'surname', 'family name', 'nachname', 'nom de famille'],
   dojo: ['dojo', 'club', 'dojo/club', 'club/dojo', 'verein', 'organisation', 'organization', 'association'],
+  country: ['country', 'nation', 'nationality', 'country code', 'noc', 'ioc', 'land', 'pays', 'държава', 'staat'],
   team: ['team', 'team name', 'mannschaft', 'équipe', 'equipe'],
   grade: ['grade', 'rank', 'dan', 'kyu', 'dan/kyu'],
   seed: ['seed', 'seeding', 'seeded']
@@ -82,6 +89,12 @@ export function rowsToEntrants(input: readonly (readonly unknown[])[]): ParseRes
     }
     seen.add(key)
     const entrant: ImportedEntrant = { name, dojo }
+    const country = at(row, 'country')
+    if (country) {
+      const code = toIocCode(country)
+      if (code) entrant.country = code
+      else warnings.push(`Row ${line}: unknown country "${country}" for ${name}; left empty.`)
+    }
     const team = at(row, 'team')
     const grade = at(row, 'grade')
     const seed = Number.parseInt(at(row, 'seed'), 10)

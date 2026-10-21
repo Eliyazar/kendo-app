@@ -1,12 +1,15 @@
-// Creating matches and team encounters, and tallying team results.
+// Creating matches and team encounters, team lineups, and tallying team results.
 
 import { uid } from './ids'
-import type { Id, Match, MatchConfig, MatchKind, Side, TeamMatch, TeamMatchResult, Tournament } from './types'
+import type { Id, Match, MatchConfig, MatchKind, Side, Team, TeamMatch, TeamMatchResult, Tournament } from './types'
 
-export function newMatch(id: Id, kind: MatchKind, akaId: Id | null, shiroId: Id | null, config: MatchConfig): Match {
+export class LineupError extends Error {}
+
+export function newMatch(id: Id, kind: MatchKind, akaId: Id | null, shiroId: Id | null, config: MatchConfig, courtId: Id = 'court'): Match {
   return {
     id,
     kind,
+    courtId,
     aka: { playerId: akaId },
     shiro: { playerId: shiroId },
     config,
@@ -17,12 +20,18 @@ export function newMatch(id: Id, kind: MatchKind, akaId: Id | null, shiroId: Id 
   }
 }
 
+/** Player (individual) or team (team mode) withdrew after the draw. */
+export function isWithdrawn(t: Tournament, entrantId: Id): boolean {
+  return Boolean(t.mode === 'team' ? t.teams[entrantId]?.withdrawn : t.players[entrantId]?.withdrawn)
+}
+
 /** Pool or bracket entrant on one side of a match: player id, or team id in team mode. */
 export function entrantOf(t: Tournament, m: Match, side: Side): Id | null {
   return t.mode === 'team' ? (m[side].teamId ?? null) : m[side].playerId
 }
 
 export interface Placement {
+  courtId: Id
   poolId?: Id
   bracketNodeId?: Id
 }
@@ -49,7 +58,7 @@ function configFor(t: Tournament, kind: MatchKind): MatchConfig {
  */
 export function createMeeting(t: Tournament, kind: MatchKind, akaId: Id, shiroId: Id, place: Placement): Scheduled {
   if (t.mode === 'individual') {
-    const m: Match = { ...newMatch(uid('m'), kind, akaId, shiroId, configFor(t, kind)), ...place }
+    const m: Match = { ...newMatch(uid('m'), kind, akaId, shiroId, configFor(t, kind), place.courtId), ...place }
     return { t: { ...t, matches: { ...t.matches, [m.id]: m } }, meetingId: m.id, boutIds: [m.id] }
   }
 
@@ -63,10 +72,10 @@ export function createMeeting(t: Tournament, kind: MatchKind, akaId: Id, shiroId
   if (!aka || !shiro) throw new Error('Unknown team.')
   const tmId = uid('tm')
   const config = configFor(t, kind)
-  const bouts: Match[] = aka.roster.map((_, pos) => ({
-    ...newMatch(uid('m'), kind, aka.roster[pos] ?? null, shiro.roster[pos] ?? null, config),
-    aka: { playerId: aka.roster[pos] ?? null, teamId: aka.id },
-    shiro: { playerId: shiro.roster[pos] ?? null, teamId: shiro.id },
+  const bouts: Match[] = aka.order.map((_, pos) => ({
+    ...newMatch(uid('m'), kind, null, null, config, place.courtId),
+    aka: { playerId: aka.order[pos] ?? null, teamId: aka.id },
+    shiro: { playerId: shiro.order[pos] ?? null, teamId: shiro.id },
     teamMatchId: tmId,
     position: pos,
     ...place
@@ -94,7 +103,7 @@ export function createMeeting(t: Tournament, kind: MatchKind, akaId: Id, shiroId
 /** A bout between two teams whose fighters the operator picks (daihyo-sen / team tie-breaker). */
 function representativeBout(t: Tournament, kind: MatchKind, akaTeamId: Id, shiroTeamId: Id, place: Placement): Match {
   return {
-    ...newMatch(uid('m'), kind, null, null, t.deciderConfig),
+    ...newMatch(uid('m'), kind, null, null, t.deciderConfig, place.courtId),
     aka: { playerId: null, teamId: akaTeamId },
     shiro: { playerId: null, teamId: shiroTeamId },
     representative: true,
@@ -107,6 +116,63 @@ export function enqueue(t: Tournament, ids: Id[], afterId?: Id): Tournament {
   const at = afterId ? t.matchQueue.indexOf(afterId) : -1
   const queue = at < 0 ? [...t.matchQueue, ...ids] : [...t.matchQueue.slice(0, at + 1), ...ids, ...t.matchQueue.slice(at + 1)]
   return { ...t, matchQueue: queue }
+}
+
+// ---------------------------------------------------------------------------
+// Team lineups (oda)
+// ---------------------------------------------------------------------------
+
+/** No bout of the encounter has started: its order can still change. */
+export function encounterOpen(t: Tournament, tm: TeamMatch): boolean {
+  return tm.boutIds.every((id) => {
+    const b = t.matches[id]
+    return b && b.status === 'scheduled' && b.events.length === 0 && b.timer.elapsedMs === 0 && b.timer.runningSince === null
+  })
+}
+
+export const sideOfTeam = (tm: TeamMatch, teamId: Id): Side | null =>
+  tm.akaTeamId === teamId ? 'aka' : tm.shiroTeamId === teamId ? 'shiro' : null
+
+/** Check a proposed order: one entry per position, members of the team only, nobody twice. */
+export function validateLineup(team: Team, lineup: readonly (Id | null)[]): string | null {
+  if (lineup.length !== team.size) return `The order needs exactly ${team.size} positions.`
+  const ids = lineup.filter((id): id is Id => id !== null)
+  if (ids.some((id) => !team.members.includes(id))) return 'Only members of the team can fight.'
+  if (new Set(ids).size !== ids.length) return 'A player can only fight once per encounter.'
+  return null
+}
+
+/** Put a lineup on the bouts of an encounter that has not started yet. */
+export function setLineup(t: Tournament, tmId: Id, side: Side, lineup: (Id | null)[], explicit = true): Tournament {
+  const tm = t.teamMatches[tmId]
+  if (!tm) throw new LineupError('Unknown team match.')
+  if (!encounterOpen(t, tm)) throw new LineupError('This encounter has started; its order is locked.')
+  const team = t.teams[side === 'aka' ? tm.akaTeamId : tm.shiroTeamId]!
+  const problem = validateLineup(team, lineup)
+  if (problem) throw new LineupError(problem)
+  const matches = { ...t.matches }
+  tm.boutIds.forEach((id, pos) => {
+    const b = matches[id]!
+    matches[id] = { ...b, [side]: { ...b[side], playerId: lineup[pos] ?? null } }
+  })
+  const updated: TeamMatch = explicit ? { ...tm, lineupSet: { ...tm.lineupSet, [side]: true } } : tm
+  return { ...t, matches, teamMatches: { ...t.teamMatches, [tm.id]: updated } }
+}
+
+/** Current lineup of one side of an encounter, read from its bouts. */
+export function lineupOf(t: Tournament, tm: TeamMatch, side: Side): (Id | null)[] {
+  return tm.boutIds.map((id) => t.matches[id]?.[side].playerId ?? null)
+}
+
+/** After a team's default order changes, refresh every open encounter that has no explicit order. */
+export function syncDefaultOrder(t: Tournament, teamId: Id): Tournament {
+  const team = t.teams[teamId]
+  if (!team) return t
+  for (const tm of Object.values(t.teamMatches)) {
+    const side = sideOfTeam(tm, teamId)
+    if (side && !tm.lineupSet?.[side] && encounterOpen(t, tm)) t = setLineup(t, tm.id, side, team.order, false)
+  }
+  return t
 }
 
 // ---------------------------------------------------------------------------
@@ -140,18 +206,19 @@ export function tallyEncounter(t: Tournament, tm: TeamMatch): EncounterTally {
 }
 
 /**
- * Re-evaluate an encounter after one of its bouts was approved.
+ * Re-evaluate an encounter after one of its bouts was approved or edited.
  * A level bracket encounter gets a daihyo-sen queued right after `afterBoutId`.
  */
 export function refreshEncounter(t: Tournament, tmId: Id, afterBoutId: Id): { t: Tournament; decided: boolean } {
   const tm = t.teamMatches[tmId]
   if (!tm) return { t, decided: false }
   const tally = tallyEncounter(t, tm)
-  const started = tm.boutIds.some((id) => t.matches[id]?.status !== 'scheduled')
+  const started = !encounterOpen(t, tm)
 
   if (tally.complete && tally.winner === null && tm.kind === 'bracket' && !tm.daihyoMatchId) {
-    const bout = { ...representativeBout(t, tm.kind, tm.akaTeamId, tm.shiroTeamId, {}), teamMatchId: tm.id }
-    if (tm.bracketNodeId) bout.bracketNodeId = tm.bracketNodeId
+    const place: Placement = { courtId: tm.courtId }
+    if (tm.bracketNodeId) place.bracketNodeId = tm.bracketNodeId
+    const bout = { ...representativeBout(t, tm.kind, tm.akaTeamId, tm.shiroTeamId, place), teamMatchId: tm.id }
     const next: Tournament = {
       ...t,
       matches: { ...t.matches, [bout.id]: bout },
@@ -162,8 +229,7 @@ export function refreshEncounter(t: Tournament, tmId: Id, afterBoutId: Id): { t:
 
   const decided = tally.complete && (tally.winner !== null || tm.kind !== 'bracket')
   const { complete: _c, ...result } = tally
-  const updated: TeamMatch = decided
-    ? { ...tm, status: 'completed', result }
-    : { ...tm, status: started ? 'in-progress' : 'scheduled' }
+  const { result: _old, ...rest } = tm
+  const updated: TeamMatch = decided ? { ...tm, status: 'completed', result } : { ...rest, status: started ? 'in-progress' : 'scheduled' }
   return { t: { ...t, teamMatches: { ...t.teamMatches, [tm.id]: updated } }, decided }
 }

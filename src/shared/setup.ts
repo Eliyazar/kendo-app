@@ -1,10 +1,12 @@
 // Tournament creation: validate the operator's setup, draw pools, schedule
 // the round-robin fight order.
 
+import { toIocCode } from './countries'
+import { courtFor, fillCourts, makeCourts } from './courts'
 import { createMeeting, enqueue } from './encounters'
-import { rng, shuffle, uid } from './ids'
+import { newPin, rng, shuffle, uid } from './ids'
 import type { ImportedEntrant } from './import-parse'
-import type { Id, MatchConfig, Player, Pool, Team, TeamSize, Tournament, TournamentMode } from './types'
+import { MAX_RESERVES, type Id, type MatchConfig, type Player, type Pool, type Team, type TeamSize, type Tournament, type TournamentMode } from './types'
 
 export interface TournamentSetup {
   name: string
@@ -17,6 +19,8 @@ export interface TournamentSetup {
   advancePerPool: number
   poolMatchMinutes: number
   bracketMatchMinutes: number
+  /** Number of courts (shiai-jo) fighting in parallel. */
+  courts: number
   entrants: ImportedEntrant[]
   /** Seed for the random part of the draw (same seed + same list = same pools). */
   drawSeed: number
@@ -26,6 +30,7 @@ export const SETUP_LIMITS = {
   poolSize: [2, 8],
   advancePerPool: [1, 4],
   minutes: [0.5, 15],
+  courts: [1, 4],
   entrants: 512
 } as const
 
@@ -63,6 +68,8 @@ export function validateSetup(input: unknown): TournamentSetup | string {
   if (!inRange(s['poolMatchMinutes'], SETUP_LIMITS.minutes) || !inRange(s['bracketMatchMinutes'], SETUP_LIMITS.minutes)) {
     return 'Match time must be between 0.5 and 15 minutes.'
   }
+  const courts = s['courts'] === undefined ? 1 : s['courts']
+  if (!Number.isInteger(courts) || !inRange(courts, SETUP_LIMITS.courts)) return 'Courts must be 1–4.'
   const drawSeed = Number.isInteger(s['drawSeed']) ? (s['drawSeed'] as number) : 1
   if (!Array.isArray(s['entrants']) || s['entrants'].length > SETUP_LIMITS.entrants) return 'Invalid participant list.'
 
@@ -74,6 +81,12 @@ export function validateSetup(input: unknown): TournamentSetup | string {
     const entrant: ImportedEntrant = { name: ename, dojo: text(e['dojo']) ?? '' }
     const team = text(e['team'])
     const grade = text(e['grade'])
+    const countryText = text(e['country'])
+    if (countryText) {
+      const code = toIocCode(countryText)
+      if (!code) return `Unknown country "${countryText}" for ${ename}. Use a name or IOC code such as BUL or SRB.`
+      entrant.country = code
+    }
     if (team) entrant.team = team
     if (grade) entrant.grade = grade
     if (Number.isInteger(e['seed']) && (e['seed'] as number) > 0) entrant.seed = e['seed'] as number
@@ -88,6 +101,7 @@ export function validateSetup(input: unknown): TournamentSetup | string {
     advancePerPool: s['advancePerPool'] as number,
     poolMatchMinutes: s['poolMatchMinutes'] as number,
     bracketMatchMinutes: s['bracketMatchMinutes'] as number,
+    courts: courts as number,
     entrants,
     drawSeed
   }
@@ -96,8 +110,10 @@ export function validateSetup(input: unknown): TournamentSetup | string {
   const count = mode === 'team' ? groupTeams(entrants).length : entrants.length
   if (mode === 'team') {
     if (entrants.some((e) => !e.team)) return 'In team mode every player needs a team name.'
-    const tooBig = groupTeams(entrants).find((g) => g.players.length > teamSize!)
-    if (tooBig) return `Team "${tooBig.name}" has ${tooBig.players.length} players; the team size is ${teamSize}.`
+    const tooBig = groupTeams(entrants).find((g) => g.players.length > teamSize! + MAX_RESERVES)
+    if (tooBig) {
+      return `Team "${tooBig.name}" has ${tooBig.players.length} players; the most is ${teamSize! + MAX_RESERVES} (${teamSize} + ${MAX_RESERVES} reserves).`
+    }
   }
   if (count < 2) return mode === 'team' ? 'At least 2 teams are needed.' : 'At least 2 participants are needed.'
   const smallest = Math.floor(count / poolCount(count, setup.poolSize))
@@ -193,15 +209,19 @@ export function createTournament(setup: TournamentSetup, now: number): Tournamen
   if (setup.mode === 'team') {
     const size = setup.teamSize!
     drawEntrants = groupTeams(setup.entrants).map((g) => {
-      const team: Team = { id: uid('t'), name: g.name, dojo: g.players[0]?.dojo ?? '', size, roster: [] }
+      const team: Team = { id: uid('t'), name: g.name, dojo: g.players[0]?.dojo ?? '', size, members: [], order: [], pin: newPin() }
+      const country = g.players.find((e) => e.country)?.country
+      if (country) team.country = country
       for (const e of g.players) {
         const p: Player = { id: uid('p'), name: e.name, dojo: e.dojo, teamId: team.id }
         if (e.grade) p.grade = e.grade
+        if (e.country) p.country = e.country
         players[p.id] = p
-        team.roster.push(p.id)
+        team.members.push(p.id)
       }
+      // File order is the default fighting order; players beyond the team size are reserves.
       // Missing positions stay empty: those bouts are won by fusen-gachi.
-      while (team.roster.length < size) team.roster.push(null)
+      team.order = Array.from({ length: size }, (_, i) => team.members[i] ?? null)
       teams[team.id] = team
       const seeds = g.players.map((e) => e.seed).filter((x): x is number => x !== undefined)
       return seeds.length ? { id: team.id, dojo: team.dojo, seed: Math.min(...seeds) } : { id: team.id, dojo: team.dojo }
@@ -211,6 +231,7 @@ export function createTournament(setup: TournamentSetup, now: number): Tournamen
       const p: Player = { id: uid('p'), name: e.name, dojo: e.dojo }
       if (e.grade) p.grade = e.grade
       if (e.seed) p.seed = e.seed
+      if (e.country) p.country = e.country
       players[p.id] = p
       return e.seed ? { id: p.id, dojo: e.dojo, seed: e.seed } : { id: p.id, dojo: e.dojo }
     })
@@ -235,8 +256,8 @@ export function createTournament(setup: TournamentSetup, now: number): Tournamen
     matches: {},
     teamMatches: {},
     bracket: null,
+    courts: makeCourts(setup.courts, () => uid('court')),
     matchQueue: [],
-    activeMatchId: null,
     createdAt: now,
     updatedAt: now
   }
@@ -248,10 +269,10 @@ export function createTournament(setup: TournamentSetup, now: number): Tournamen
   for (let r = 0; r < maxRounds; r++) {
     pools.forEach((pool, i) => {
       for (const [a, b] of schedules[i]![r] ?? []) {
-        const s = createMeeting(t, 'pool', a, b, { poolId: pool.id })
+        const s = createMeeting(t, 'pool', a, b, { poolId: pool.id, courtId: courtFor(t, i) })
         t = enqueue(s.t, s.boutIds)
       }
     })
   }
-  return { ...t, activeMatchId: t.matchQueue[0] ?? null }
+  return fillCourts(t)
 }
