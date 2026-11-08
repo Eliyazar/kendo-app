@@ -3,6 +3,9 @@
   "name": "kendo-live",
   "main": "src/index.ts",
   "compatibility_date": "2026-10-01",
+  // Public address: https://kendo-live.<subdomain>.workers.dev. No preview links for test versions.
+  "workers_dev": true,
+  "preview_urls": false,
   "durable_objects": {
     "bindings": [{ "name": "TOURNAMENT", "class_name": "TournamentRoom" }]
   },
