@@ -190,3 +190,19 @@ describe('team tournament', () => {
     expect(tour(s).phase).toBe('finished')
   })
 })
+
+describe('ties in several pools', () => {
+  it('lets the table generate every pool tie-breaker at once', () => {
+    // 6 players, pools of 3: aka always wins -> circular three-way tie in both pools.
+    let s = act(initialState(), { type: 'CREATE_TOURNAMENT', setup: setup({ entrants: players(6), advancePerPool: 1 }) })
+    while (activeId(s)) s = play(s, 'aka')
+    const ties = unresolvedTies(tour(s))
+    expect(ties).toHaveLength(2)
+    s = act(s, { type: 'GENERATE_TIE_BREAKER', poolId: ties[0]!.poolId, entrantIds: ties[0]!.entrantIds })
+    // The other pool's tie is still listed and can be generated right away.
+    expect(unresolvedTies(tour(s)).map((g) => g.poolId)).toEqual([ties[1]!.poolId])
+    s = act(s, { type: 'GENERATE_TIE_BREAKER', poolId: ties[1]!.poolId, entrantIds: ties[1]!.entrantIds })
+    expect(Object.values(tour(s).matches).filter((m) => m.kind === 'tie-breaker')).toHaveLength(6)
+    expect(() => reduceApp(s, { type: 'LOCK_POOLS' }, clock)).toThrow(/Finish all pool/)
+  })
+})

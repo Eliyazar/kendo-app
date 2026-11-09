@@ -2,7 +2,7 @@
 
 import type { AdminAction } from '@shared/ipc'
 import { describeEntrant } from '@shared/public-view'
-import { computeStandings, poolsComplete, unresolvedTies } from '@shared/standings'
+import { computeStandings, poolMatchesComplete, poolsComplete, tieBreakPending, unresolvedTies } from '@shared/standings'
 import type { Pool, Tournament } from '@shared/types'
 import { useConfirm } from './useAdmin'
 
@@ -87,9 +87,12 @@ function PoolTable({ t, pool, review }: { t: Tournament; pool: Pool; review: boo
 }
 
 export function PoolsView({ t, send }: { t: Tournament; send: (a: AdminAction) => void }) {
-  const complete = poolsComplete(t)
+  // Review starts once every regular pool match is approved; tie-breakers run per pool.
+  const complete = poolMatchesComplete(t)
   const review = t.phase === 'pools' && complete
   const ties = review ? unresolvedTies(t) : []
+  const pendingPools = review ? t.pools.filter((p) => tieBreakPending(t, p.id)) : []
+  const canLock = review && poolsComplete(t) && ties.length === 0
   const [lockArmed, confirmLock] = useConfirm(4000)
   const poolMatches = Object.values(t.matches).filter((m) => m.kind === 'pool')
   const done = poolMatches.filter((m) => m.status === 'completed').length
@@ -109,7 +112,7 @@ export function PoolsView({ t, send }: { t: Tournament; send: (a: AdminAction) =
         </div>
         {t.phase === 'pools' && (
           <button
-            disabled={!review || ties.length > 0}
+            disabled={!canLock}
             onClick={() => confirmLock(() => send({ type: 'LOCK_POOLS' }))}
             className={`h-14 rounded-xl px-6 text-lg font-black disabled:opacity-30 ${
               lockArmed ? 'bg-red-600 hover:bg-red-500' : 'bg-emerald-600 hover:bg-emerald-500'
@@ -119,6 +122,13 @@ export function PoolsView({ t, send }: { t: Tournament; send: (a: AdminAction) =
           </button>
         )}
       </div>
+
+      {pendingPools.length > 0 && (
+        <div className="rounded-2xl border border-line bg-surface px-4 py-3 text-sm text-muted">
+          Tie-breaker in progress: <b className="text-white">{pendingPools.map((p) => p.name).join(', ')}</b>. Fight and approve it on the shiai-jo; the
+          standings update automatically.
+        </div>
+      )}
 
       {ties.length > 0 && (
         <div className="flex flex-col gap-2 rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4">

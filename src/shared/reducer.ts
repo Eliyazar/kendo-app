@@ -22,7 +22,7 @@ import type { AdminAction } from './ipc'
 import { reduceMatch, RuleError, type MatchAction } from './match-engine'
 import { afterMatchCompleted } from './progress'
 import { createTournament, roundRobin, validateSetup } from './setup'
-import { poolsComplete, unresolvedTies } from './standings'
+import { poolMatchesComplete, poolsComplete, unresolvedTies } from './standings'
 import { SCHEMA_VERSION, type AppState, type Match, type Tournament } from './types'
 
 export type AppAction = AdminAction | { type: 'TICK' }
@@ -138,7 +138,7 @@ export function reduceApp(state: AppState, action: AppAction, now: number): AppU
     case 'GENERATE_TIE_BREAKER': {
       let tour = requireTournament(t)
       if (tour.phase !== 'pools') throw new RuleError('Tie-breakers are only for the pool phase.')
-      if (!poolsComplete(tour)) throw new RuleError('Finish all pool matches first.')
+      if (!poolMatchesComplete(tour)) throw new RuleError('Finish all pool matches first.')
       const tie = unresolvedTies(tour).find(
         (g) =>
           g.poolId === action.poolId &&

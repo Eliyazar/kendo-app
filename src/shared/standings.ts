@@ -154,6 +154,16 @@ export function poolsComplete(t: Tournament): boolean {
   return Object.values(t.matches).every((m) => (m.kind === 'pool' || m.kind === 'tie-breaker' ? m.status === 'completed' : true))
 }
 
+/** Every regular pool match is approved (tie-breakers may still be running). */
+export function poolMatchesComplete(t: Tournament): boolean {
+  return Object.values(t.matches).every((m) => m.kind !== 'pool' || m.status === 'completed')
+}
+
+/** A tie-breaker of this pool is still to be fought. */
+export function tieBreakPending(t: Tournament, poolId: Id): boolean {
+  return Object.values(t.matches).some((m) => m.kind === 'tie-breaker' && m.poolId === poolId && m.status !== 'completed')
+}
+
 export interface TieGroup {
   poolId: Id
   entrantIds: Id[]
@@ -166,6 +176,8 @@ export interface TieGroup {
 export function unresolvedTies(t: Tournament): TieGroup[] {
   const ties: TieGroup[] = []
   for (const pool of t.pools) {
+    // A pool with a tie-breaker under way is settled once it is fought.
+    if (tieBreakPending(t, pool.id)) continue
     const seen = new Set<Id>()
     for (const s of computeStandings(t, pool)) {
       if (!s.tiedWith.length || s.rank > t.advancePerPool || seen.has(s.entrantId)) continue
