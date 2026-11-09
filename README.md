@@ -1,5 +1,7 @@
 # Kendo Tournament Manager
 
+> 🇧🇬 Ръководство на български: [docs/РЪКОВОДСТВО.md](docs/РЪКОВОДСТВО.md)
+
 Offline-first desktop app (Windows/macOS) for running Kendo tournaments: an **Admin Control Panel** on the laptop and a **Public Scoreboard** on the TV/projector.
 
 ## Stack
