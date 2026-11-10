@@ -1,8 +1,9 @@
 // Single-elimination bracket built from the pool qualifiers.
 
-import { courtFor } from './courts'
+import { courtFor, homeCourts } from './courts'
 import { createMeeting, encounterOpen, enqueue, isWithdrawn } from './encounters'
 import { uid } from './ids'
+import { poolLetter } from './setup'
 import { computeStandings } from './standings'
 import type { Bracket, BracketNode, Id, Side, Tournament } from './types'
 
@@ -67,7 +68,7 @@ export function assignSeeds(qs: Qualifier[], size: number): Map<number, Id> {
 }
 
 /** Final on the first court; earlier rounds spread over all courts. */
-const courtForNode = (t: Tournament, node: BracketNode): Id => (node.next ? courtFor(t, node.slot) : t.courts[0]!.id)
+const courtForNode = (t: Tournament, node: BracketNode): Id => (node.next ? courtFor(t, node.slot) : homeCourts(t)[0]!)
 
 /** Create a match for a node once both sides are known; queue it. A withdrawn side is a walkover. */
 function scheduleNode(t: Tournament, node: BracketNode): Tournament {
@@ -149,20 +150,10 @@ export function replaceWinner(t: Tournament, nodeId: Id, winner: Id | null): Tou
   return winner ? advance(t, node.id, winner) : t
 }
 
-export function buildBracket(t: Tournament): Tournament {
-  const qs = qualifiers(t)
-  if (qs.length === 1) {
-    // A single qualifier is the champion.
-    const id = uid('bn')
-    const node: BracketNode = { id, round: 0, slot: 0, akaEntrantId: qs[0]!.entrantId, shiroEntrantId: null, matchId: null, winnerEntrantId: qs[0]!.entrantId, next: null }
-    return { ...t, bracket: { rounds: 1, nodes: { [id]: node } }, phase: 'finished' }
-  }
-
-  const size = nextPow2(qs.length)
+/** Nodes for a bracket whose first round is given slot by slot (null = bye); schedules round one. */
+function makeBracket(t: Tournament, slots: (Id | null)[]): Tournament {
+  const size = slots.length
   const rounds = Math.log2(size)
-  const seeds = assignSeeds(qs, size)
-  const order = seedOrder(size)
-
   // Build every node, last round first so `next` links exist.
   const ids: Id[][] = []
   for (let r = 0; r < rounds; r++) ids.push(Array.from({ length: size / 2 ** (r + 1) }, () => uid('bn')))
@@ -175,8 +166,8 @@ export function buildBracket(t: Tournament): Tournament {
         id,
         round: r,
         slot,
-        akaEntrantId: r === 0 ? (seeds.get(order[slot * 2]!) ?? null) : null,
-        shiroEntrantId: r === 0 ? (seeds.get(order[slot * 2 + 1]!) ?? null) : null,
+        akaEntrantId: r === 0 ? (slots[slot * 2] ?? null) : null,
+        shiroEntrantId: r === 0 ? (slots[slot * 2 + 1] ?? null) : null,
         matchId: null,
         winnerEntrantId: null,
         next: nextId ? { nodeId: nextId, side } : null
@@ -191,4 +182,38 @@ export function buildBracket(t: Tournament): Tournament {
     next = lone ? advance(next, id, lone) : scheduleNode(next, node) // bye: straight through
   }
   return next
+}
+
+/** Entrant at a pool place, e.g. "B2" = second of Pool B (withdrawn entrants skipped); null if none. */
+function atPlace(t: Tournament, ref: string): Id | null {
+  const letter = ref.slice(0, -1)
+  const place = Number(ref.slice(-1))
+  const pool = t.pools.find((p) => poolLetter(p.name) === letter)
+  if (!pool) return null
+  const rows = computeStandings(t, pool).filter((r) => !isWithdrawn(t, r.entrantId))
+  return rows[place - 1]?.entrantId ?? null
+}
+
+export function buildBracket(t: Tournament): Tournament {
+  const plan = t.bracketPlan ?? { kind: 'auto' }
+  // No elimination: the pool ranking decides the places.
+  if (plan.kind === 'none') return { ...t, phase: 'finished' }
+  if (plan.kind === 'pairs') {
+    const size = plan.pairs.length * 2
+    if (size < 2 || (size & (size - 1)) !== 0) {
+      throw new BracketError(`The draw lists ${plan.pairs.length} first-round pairings; it must be 1, 2, 4, 8 or 16.`)
+    }
+    return makeBracket(t, plan.pairs.flatMap(([a, b]) => [atPlace(t, a), atPlace(t, b)]))
+  }
+
+  const qs = qualifiers(t)
+  if (qs.length === 1) {
+    // A single qualifier is the champion.
+    const id = uid('bn')
+    const node: BracketNode = { id, round: 0, slot: 0, akaEntrantId: qs[0]!.entrantId, shiroEntrantId: null, matchId: null, winnerEntrantId: qs[0]!.entrantId, next: null }
+    return { ...t, bracket: { rounds: 1, nodes: { [id]: node } }, phase: 'finished' }
+  }
+  const size = nextPow2(qs.length)
+  const seeds = assignSeeds(qs, size)
+  return makeBracket(t, seedOrder(size).map((seed) => seeds.get(seed) ?? null))
 }

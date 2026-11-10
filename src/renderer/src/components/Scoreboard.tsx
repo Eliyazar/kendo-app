@@ -97,7 +97,7 @@ export function Scoreboard({ view }: { view: PublicView | null }) {
     <div className="relative flex h-full w-full flex-col bg-ink text-white">
       <header className="grid h-[104px] grid-cols-[1fr_auto_1fr] items-center border-b border-line px-16">
         <div className="truncate text-[30px] font-semibold tracking-[0.2em] text-muted uppercase">
-          {view?.tournamentName ?? 'Kendo Tournament Manager'}
+          {(view?.multiCategory && view.categoryName) || (view?.tournamentName ?? 'Kendo Tournament Manager')}
         </div>
         <div className="display text-[56px] font-bold tracking-wide">{m ? [m.label, m.positionLabel].filter(Boolean).join(' · ') : ''}</div>
         <div className="flex items-center justify-end gap-5">

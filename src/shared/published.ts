@@ -10,9 +10,9 @@ import { encounterOpen, entrantOf, lineupOf, tallyEncounter } from './encounters
 import { markLetter } from './marks'
 import { computeScore } from './match-engine'
 import { computeStandings } from './standings'
-import type { AppState, Id, Match, MatchDecision, MatchKind, MatchStatus, Side, Tournament, TournamentMode, TournamentPhase } from './types'
+import type { AppState, Competition, Id, Match, MatchDecision, MatchKind, MatchStatus, Side, Tournament, TournamentMode, TournamentPhase } from './types'
 
-export const PUBLISHED_VERSION = 1
+export const PUBLISHED_VERSION = 2
 
 export interface PubPerson {
   id: Id
@@ -68,7 +68,7 @@ export interface PubSide {
 export interface PubMatch {
   id: Id
   courtId: Id
-  /** Position in the overall fight order. */
+  /** Position in the fight order: earlier categories first, then the category's own order. */
   order: number
   kind: MatchKind
   /** e.g. "Pool A", "Semi-final", "Tie-breaker" */
@@ -116,23 +116,20 @@ export interface PubBracketNode {
 export interface PubCourt {
   id: Id
   name: string
+  /** Category fighting on this court now. */
+  categoryId: Id | null
   /** Exactly what that court's TV shows (never the clock). */
   view: PublicView
 }
 
-export interface PublishedSnapshot {
-  version: typeof PUBLISHED_VERSION
-  publishedAt: number
-  tournament: {
-    id: Id
-    name: string
-    date: string
-    mode: TournamentMode
-    phase: TournamentPhase
-    teamSize?: number
-    advancePerPool: number
-  }
-  courts: PubCourt[]
+/** One category of the competition (e.g. "Veterans individual", "Senior Teams"). */
+export interface PubCategory {
+  id: Id
+  name: string
+  mode: TournamentMode
+  phase: TournamentPhase
+  teamSize?: number
+  advancePerPool: number
   players: PubPerson[]
   teams: PubTeam[]
   pools: PubPool[]
@@ -142,6 +139,16 @@ export interface PublishedSnapshot {
   bracket: { rounds: number; nodes: PubBracketNode[] } | null
   /** 1st, 2nd and both semi-final losers (3rd), once known. */
   podium: { place: 1 | 2 | 3; entrantId: Id }[]
+}
+
+export interface PublishedSnapshot {
+  version: typeof PUBLISHED_VERSION
+  publishedAt: number
+  /** The competition. */
+  tournament: { id: Id; name: string; date: string }
+  courts: PubCourt[]
+  /** In competition order. */
+  categories: PubCategory[]
 }
 
 /** Private data for the worker: PIN check and each team's own open orders. */
@@ -168,8 +175,8 @@ export interface LineupSubmission {
   at: number
 }
 
-/** Online page address for a tournament: short and stable. */
-export const slugFor = (t: Tournament): string => t.id.replace(/^tour_/, '')
+/** Online page address for a competition: short and stable. */
+export const slugFor = (c: { id: Id }): string => c.id.replace(/^(comp|tour)_/, '')
 
 const marksOf = (m: Match, side: Side): string => computeScore(m.events)[side].marks.map((mk) => markLetter(mk) || '○').join('')
 
@@ -190,6 +197,13 @@ function pubSide(t: Tournament, m: Match, side: Side, hidden: boolean): PubSide 
 
 /** Final standings: champion, runner-up, and both semi-final losers. */
 export function podium(t: Tournament): { place: 1 | 2 | 3; entrantId: Id }[] {
+  // No elimination (single pool): the pool ranking gives 1st, 2nd and 3rd.
+  if (t.bracketPlan?.kind === 'none') {
+    if (t.phase !== 'finished' || !t.pools[0]) return []
+    return computeStandings(t, t.pools[0])
+      .filter((r) => r.rank <= 3)
+      .map((r) => ({ place: r.rank as 1 | 2 | 3, entrantId: r.entrantId }))
+  }
   const b = t.bracket
   if (!b) return []
   const nodes = Object.values(b.nodes)
@@ -209,19 +223,17 @@ export function podium(t: Tournament): { place: 1 | 2 | 3; entrantId: Id }[] {
   return out
 }
 
-export function toPublished(state: AppState, now: number): PublishedSnapshot | null {
-  const t = state.tournament
-  if (!t) return null
+function publishCategory(t: Tournament, categoryIndex: number): PubCategory {
   const openEncounter = new Set(Object.values(t.teamMatches).filter((tm) => encounterOpen(t, tm)).map((tm) => tm.id))
 
-  const matches: PubMatch[] = t.matchQueue.flatMap((id, order) => {
+  const matches: PubMatch[] = t.matchQueue.flatMap((id, i) => {
     const m = t.matches[id]
     if (!m) return []
     const hidden = Boolean(m.teamMatchId && openEncounter.has(m.teamMatchId))
     const pm: PubMatch = {
       id: m.id,
       courtId: m.courtId,
-      order,
+      order: categoryIndex * 100_000 + i,
       kind: m.kind,
       label: matchLabel(t, m),
       positionLabel: positionLabel(t, m),
@@ -243,11 +255,12 @@ export function toPublished(state: AppState, now: number): PublishedSnapshot | n
     return [pm]
   })
 
-  const snapshot: PublishedSnapshot = {
-    version: PUBLISHED_VERSION,
-    publishedAt: now,
-    tournament: { id: t.id, name: t.name, date: t.date, mode: t.mode, phase: t.phase, advancePerPool: t.advancePerPool },
-    courts: t.courts.map((c) => ({ id: c.id, name: c.name, view: toPublicView(state, c.id) })),
+  const snapshot: PubCategory = {
+    id: t.id,
+    name: t.name,
+    mode: t.mode,
+    phase: t.phase,
+    advancePerPool: t.advancePerPool,
     players: Object.values(t.players).map((p) => {
       const out: PubPerson = { id: p.id, name: p.name, dojo: p.dojo }
       if (p.country) out.country = p.country
@@ -317,16 +330,30 @@ export function toPublished(state: AppState, now: number): PublishedSnapshot | n
       : null,
     podium: podium(t)
   }
-  if (t.teamSize) snapshot.tournament.teamSize = t.teamSize
+  if (t.teamSize) snapshot.teamSize = t.teamSize
   return snapshot
 }
 
+export function toPublished(state: AppState, now: number): PublishedSnapshot | null {
+  const comp = state.competition
+  if (!comp) return null
+  return {
+    version: PUBLISHED_VERSION,
+    publishedAt: now,
+    tournament: { id: comp.id, name: comp.name, date: comp.date },
+    courts: comp.courts.map((c) => ({ id: c.id, name: c.name, categoryId: c.categoryId, view: toPublicView(state, c.id) })),
+    categories: comp.categories.map(publishCategory)
+  }
+}
+
 /** Secret part: PIN hashes are computed by the caller (async WebCrypto). */
-export function openLineups(t: Tournament): PublishedSecret['openLineups'] {
+export function openLineups(comp: Competition): PublishedSecret['openLineups'] {
   const out: PublishedSecret['openLineups'] = {}
-  for (const tm of Object.values(t.teamMatches)) {
-    if (!encounterOpen(t, tm)) continue
-    out[tm.id] = { [tm.akaTeamId]: lineupOf(t, tm, 'aka'), [tm.shiroTeamId]: lineupOf(t, tm, 'shiro') }
+  for (const t of comp.categories) {
+    for (const tm of Object.values(t.teamMatches)) {
+      if (!encounterOpen(t, tm)) continue
+      out[tm.id] = { [tm.akaTeamId]: lineupOf(t, tm, 'aka'), [tm.shiroTeamId]: lineupOf(t, tm, 'shiro') }
+    }
   }
   return out
 }

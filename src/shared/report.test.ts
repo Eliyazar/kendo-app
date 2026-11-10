@@ -7,12 +7,12 @@ import type { AppState, Side } from './types'
 
 let clock = 9_000_000
 const act = (s: AppState, a: AdminAction): AppState => reduceApp(s, a, (clock += 1000)).state
-const activeId = (s: AppState) => s.tournament!.courts[0]!.activeMatchId
+const activeId = (s: AppState) => s.competition!.categories[0]!.courts[0]!.activeMatchId
 
 function playAll(s: AppState, side: Side): AppState {
   while (activeId(s)) {
     s = act(s, { type: 'ADD_IPPON', side, technique: 'M' })
-    if (s.tournament!.matches[activeId(s)!]!.status !== 'awaiting-confirmation') s = act(s, { type: 'ADD_IPPON', side, technique: 'K' })
+    if (s.competition!.categories[0]!.matches[activeId(s)!]!.status !== 'awaiting-confirmation') s = act(s, { type: 'ADD_IPPON', side, technique: 'K' })
     s = act(s, { type: 'APPROVE_MATCH' })
   }
   return s
@@ -34,13 +34,13 @@ function finishedTournament(mode: 'individual' | 'team'): AppState {
 
 describe('final standings and documents', () => {
   it('podium has 1st, 2nd and both semi-final losers as 3rd', () => {
-    const t = finishedTournament('individual').tournament!
+    const t = finishedTournament('individual').competition!.categories[0]!
     expect(t.phase).toBe('finished')
     expect(podium(t).map((p) => p.place)).toEqual([1, 2, 3, 3])
   })
 
   it('one diploma per medallist with IOC country', () => {
-    const t = finishedTournament('individual').tournament!
+    const t = finishedTournament('individual').competition!.categories[0]!
     const ds = diplomas(t)
     expect(ds).toHaveLength(4)
     expect(ds.every((d) => ['BUL', 'SRB'].includes(d.country))).toBe(true)
@@ -51,7 +51,7 @@ describe('final standings and documents', () => {
   })
 
   it('team diplomas go to every member, escaped safely', () => {
-    const t = finishedTournament('team').tournament!
+    const t = finishedTournament('team').competition!.categories[0]!
     const ds = diplomas(t)
     expect(ds).toHaveLength(4 * 3)
     expect(ds[0]!.team).toMatch(/^Team /)
@@ -59,9 +59,9 @@ describe('final standings and documents', () => {
   })
 
   it('report, PIN slips and CSV contain the results', () => {
-    const t = finishedTournament('team').tournament!
+    const t = finishedTournament('team').competition!.categories[0]!
     expect(reportHtml(t)).toContain('Final standings')
-    expect(pinSlipsHtml(t, 'https://example.org/t/abc')).toContain(Object.values(t.teams)[0]!.pin)
+    expect(pinSlipsHtml([t], t.name, 'https://example.org/t/abc')).toContain(Object.values(t.teams)[0]!.pin)
     const csv = resultsCsv(t)
     expect(csv.startsWith('﻿')).toBe(true)
     expect(csv.split('\r\n').length).toBeGreaterThan(t.matchQueue.length)
@@ -76,10 +76,10 @@ describe('final standings and documents', () => {
       }
     })
     const hidden = toPublished(s, 0)!
-    expect(hidden.matches.every((m) => m.aka.playerId === null && m.shiro.playerId === null)).toBe(true)
-    expect(JSON.stringify(hidden)).not.toContain(Object.values(s.tournament!.teams)[0]!.pin)
+    expect(hidden.categories[0]!.matches.every((m) => m.aka.playerId === null && m.shiro.playerId === null)).toBe(true)
+    expect(JSON.stringify(hidden)).not.toContain(Object.values(s.competition!.categories[0]!.teams)[0]!.pin)
     s = act(s, { type: 'TIMER_START' })
     const shown = toPublished(s, 0)!
-    expect(shown.matches[0]!.aka.playerId).not.toBeNull()
+    expect(shown.categories[0]!.matches[0]!.aka.playerId).not.toBeNull()
   })
 })

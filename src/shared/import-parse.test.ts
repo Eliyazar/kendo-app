@@ -113,7 +113,7 @@ describe('full rehearsal with the Excel test files', () => {
     const act = (a: Parameters<typeof reduceApp>[1]) => (s = reduceApp(s, a, (clock += 1000)).state)
     const playCourts = () => {
       for (let guard = 0; guard < 500; guard++) {
-        const t = s.tournament!
+        const t = s.competition!.categories[0]!
         const court = t.courts.find((c) => c.activeMatchId)
         if (!court) return
         const courtId = court.id
@@ -122,14 +122,14 @@ describe('full rehearsal with the Excel test files', () => {
           act({ type: 'SET_REPRESENTATIVE', side: 'aka', playerId: t.teams[m.aka.teamId!]!.members[0]!, courtId })
           act({ type: 'SET_REPRESENTATIVE', side: 'shiro', playerId: t.teams[m.shiro.teamId!]!.members[0]!, courtId })
         }
-        const cur = s.tournament!.matches[m.id]!
+        const cur = s.competition!.categories[0]!.matches[m.id]!
         if (!cur.aka.playerId || !cur.shiro.playerId) act({ type: 'FUSEN_GACHI', side: cur.aka.playerId ? 'aka' : 'shiro', courtId })
         else {
           // Tie-breakers follow a fixed ranking (lower id wins), so they settle instead of repeating a circle.
           const ids = [cur.aka.teamId ?? cur.aka.playerId!, cur.shiro.teamId ?? cur.shiro.playerId!]
           const side = cur.kind === 'tie-breaker' && ids[1]! < ids[0]! ? 'shiro' : 'aka'
           act({ type: 'ADD_IPPON', side, technique: 'M', courtId })
-          if (s.tournament!.matches[m.id]!.status !== 'awaiting-confirmation') act({ type: 'ADD_IPPON', side, technique: 'K', courtId })
+          if (s.competition!.categories[0]!.matches[m.id]!.status !== 'awaiting-confirmation') act({ type: 'ADD_IPPON', side, technique: 'K', courtId })
         }
         act({ type: 'APPROVE_MATCH', courtId })
       }
@@ -137,13 +137,13 @@ describe('full rehearsal with the Excel test files', () => {
     playCourts()
     // Break any ties with tie-breakers (first entrant wins), then lock.
     const { unresolvedTies } = await import('./standings')
-    for (let i = 0; i < 5 && unresolvedTies(s.tournament!).length; i++) {
-      for (const tie of unresolvedTies(s.tournament!)) act({ type: 'GENERATE_TIE_BREAKER', poolId: tie.poolId, entrantIds: tie.entrantIds })
+    for (let i = 0; i < 5 && unresolvedTies(s.competition!.categories[0]!).length; i++) {
+      for (const tie of unresolvedTies(s.competition!.categories[0]!)) act({ type: 'GENERATE_TIE_BREAKER', poolId: tie.poolId, entrantIds: tie.entrantIds })
       playCourts()
     }
     act({ type: 'LOCK_POOLS' })
     playCourts()
-    return { t: s.tournament!, podium: podium(s.tournament!) }
+    return { t: s.competition!.categories[0]!, podium: podium(s.competition!.categories[0]!) }
   }
 
   it('individual: pools on 2 courts, bracket with byes, 1st/2nd/3rd/3rd', async () => {

@@ -1,4 +1,4 @@
-// Court laptop mode: mirror the host laptop's tournament over the local network
+// Court laptop mode: mirror the host laptop's competition over the local network
 // and send this court's actions to it. The host runs the clocks and saves everything.
 
 import type { AdminAction, DispatchResult } from '@shared/ipc'
@@ -50,7 +50,7 @@ export class CourtClient {
 
   async dispatch(action: AdminAction): Promise<DispatchResult> {
     const { hostAddress, joinCode, courtId } = this.deps.config()
-    const target = courtId ?? this.state.tournament?.courts[0]?.id
+    const target = courtId ?? this.state.competition?.courts[0]?.id
     if (!target) return { ok: false, error: 'Not connected to the host yet.' }
     try {
       const res = await fetch(`${hostUrl(hostAddress)}/api/court/dispatch`, {

@@ -17,15 +17,29 @@ describe('open encounters', () => {
 
   it('ignores encounters that are not open any more', () => {
     const closed = teamSnapshot()
-    closed.encounters[0]!.lineupOpen = false
+    closed.categories[1]!.encounters[0]!.lineupOpen = false
     expect(openEncountersFor(closed, secret.openLineups, 'tA')).toEqual([])
   })
 
   it('builds the captain view', () => {
     const subs: LineupSubmission[] = [{ id: 's1', teamId: 'tA', teamMatchId: 'tm1', lineup: ['a1', 'a2', 'a3'], at: 1 }]
     const [info] = buildEncounterInfos(snap, secret.openLineups, 'tA', subs, new Set())
-    expect(info).toMatchObject({ teamMatchId: 'tm1', courtName: 'Court A', opponentTeamName: 'Beta', side: 'aka', submitted: true, confirmed: false })
+    expect(info).toMatchObject({ teamMatchId: 'tm1', courtName: 'Court A', categoryName: 'Senior Teams', opponentTeamName: 'Beta', side: 'aka', submitted: true, confirmed: false })
     expect(buildEncounterInfos(snap, secret.openLineups, 'tB', subs, new Set(['tm1:tB']))[0]).toMatchObject({ submitted: false, confirmed: true })
+  })
+})
+
+describe('categories', () => {
+  it('finds the team in its own category and ignores other categories', () => {
+    expect(openEncountersFor(snap, secret.openLineups, 'v1')).toEqual([])
+    expect(validateLineup(snap, secret.openLineups, 'v1', 'tm1', ['v1', null, null]).ok).toBe(false)
+  })
+
+  it('uses the category team size', () => {
+    const other = teamSnapshot()
+    other.categories[1]!.teamSize = 5
+    expect(validateLineup(other, secret.openLineups, 'tA', 'tm1', ['a1', 'a2', 'a3']).ok).toBe(false)
+    expect(validateLineup(other, secret.openLineups, 'tA', 'tm1', ['a1', 'a2', 'a3', null, null]).ok).toBe(true)
   })
 })
 

@@ -11,7 +11,7 @@ function act(s: AppState, a: AdminAction | { type: 'TICK' }): AppState {
   clock += 1000
   return reduceApp(s, a, clock).state
 }
-const tour = (s: AppState): Tournament => s.tournament!
+const tour = (s: AppState): Tournament => s.competition!.categories[0]!
 const activeId = (s: AppState) => tour(s).courts[0]!.activeMatchId
 const active = (s: AppState) => tour(s).matches[activeId(s)!]!
 

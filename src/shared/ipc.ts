@@ -8,6 +8,7 @@
 import type { AppState, Side, Technique } from './types'
 import type { PublicView } from './public-view'
 import type { ImportedEntrant } from './import-parse'
+import type { DrawImport } from './draw-import'
 import type { EntrantInput, PersonInput, ScoreEntry } from './editing'
 import type { TournamentSetup } from './setup'
 
@@ -18,6 +19,8 @@ export const IPC = {
   adminGetState: 'admin:get-state',
   /** invoke, admin -> main: pick and parse a participant file. */
   adminImport: 'admin:import',
+  /** invoke, admin -> main: pick draw sheets and detect categories, pools and fight order. */
+  adminImportDraw: 'admin:import-draw',
   /** invoke, admin -> main: change this laptop's settings. */
   adminSetSettings: 'admin:set-settings',
   /** invoke, admin -> main: write results, PDFs and diplomas to a folder. */
@@ -31,6 +34,15 @@ export const IPC = {
   /** send, main -> public: new PublicView. */
   publicView: 'public:view'
 } as const
+
+/** A whole competition: several categories sharing the courts. */
+export interface CompetitionSetup {
+  name: string
+  date: string
+  courts: number
+  /** Each category as a tournament setup; `courtLetters` ("A", "B"…) = where it is fought, default all courts. */
+  categories: (Omit<TournamentSetup, 'date' | 'courts'> & { courtLetters?: string[] })[]
+}
 
 /** Court-level actions may name a court; without one they act on the first court. */
 type OnCourt = { courtId?: string }
@@ -50,11 +62,13 @@ export type AdminAction =
   | ({ type: 'LOAD_MATCH'; matchId: string } & OnCourt)
   | ({ type: 'SET_REPRESENTATIVE'; side: Side; playerId: string } & OnCourt)
   | { type: 'CREATE_TOURNAMENT'; setup: TournamentSetup }
+  | { type: 'CREATE_COMPETITION'; setup: CompetitionSetup }
   | { type: 'RESET_TOURNAMENT' }
   | { type: 'GENERATE_TIE_BREAKER'; poolId: string; entrantIds: string[] }
-  | { type: 'LOCK_POOLS' }
-  | { type: 'ADD_ENTRANT'; entrant: EntrantInput }
+  | { type: 'LOCK_POOLS'; categoryId?: string }
+  | { type: 'ADD_ENTRANT'; entrant: EntrantInput; categoryId?: string }
   | { type: 'WITHDRAW_ENTRANT'; entrantId: string }
+  | { type: 'REMOVE_ENTRANT'; entrantId: string }
   | { type: 'EDIT_PLAYER'; playerId: string; patch: PersonInput }
   | { type: 'EDIT_TEAM'; teamId: string; patch: { name: string; dojo?: string; country?: string } }
   | { type: 'ADD_TEAM_MEMBER'; teamId: string; member: PersonInput }
@@ -81,11 +95,13 @@ export const ADMIN_ACTION_TYPES: readonly AdminActionType[] = [
   'LOAD_MATCH',
   'SET_REPRESENTATIVE',
   'CREATE_TOURNAMENT',
+  'CREATE_COMPETITION',
   'RESET_TOURNAMENT',
   'GENERATE_TIE_BREAKER',
   'LOCK_POOLS',
   'ADD_ENTRANT',
   'WITHDRAW_ENTRANT',
+  'REMOVE_ENTRANT',
   'EDIT_PLAYER',
   'EDIT_TEAM',
   'ADD_TEAM_MEMBER',
@@ -169,6 +185,8 @@ export interface AdminSnapshot {
   publicView: PublicView
 }
 
+export type DrawImportResult = ({ ok: true; files: string[] } & DrawImport) | { ok: false; error: string }
+
 export type ImportResult =
   | { ok: true; fileName: string; entrants: ImportedEntrant[]; warnings: string[] }
   | { ok: false; error: string }
@@ -181,6 +199,8 @@ export interface AdminBridge {
   getState(): Promise<AdminSnapshot>
   /** Opens a file picker; resolves null if the operator cancels. */
   importParticipants(): Promise<ImportResult | null>
+  /** Several .xlsx draw sheets; resolves null if the operator cancels. */
+  importDraw(): Promise<DrawImportResult | null>
   setSettings(patch: unknown): Promise<DispatchResult>
   exportResults(): Promise<ExportResult>
   openFolder(path: string): Promise<void>

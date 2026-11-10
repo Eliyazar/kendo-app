@@ -113,7 +113,7 @@ export function PoolsView({ t, send }: { t: Tournament; send: (a: AdminAction) =
         {t.phase === 'pools' && (
           <button
             disabled={!canLock}
-            onClick={() => confirmLock(() => send({ type: 'LOCK_POOLS' }))}
+            onClick={() => confirmLock(() => send({ type: 'LOCK_POOLS', categoryId: t.id }))}
             className={`h-14 rounded-xl px-6 text-lg font-black disabled:opacity-30 ${
               lockArmed ? 'bg-red-600 hover:bg-red-500' : 'bg-emerald-600 hover:bg-emerald-500'
             }`}

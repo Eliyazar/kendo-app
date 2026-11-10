@@ -30,6 +30,19 @@ Installers are not code-signed, so Windows SmartScreen and macOS Gatekeeper will
 
 ## Running a tournament
 
+### A competition with several categories, from draw files
+
+When the groups are made by someone else in Excel, use **Setup → Import draw files (all categories)…** and pick all the files at once (individual sheets and a team-composition sheet).
+
+- Each sheet becomes a **category** (e.g. "Senior female individual", "Veterans individual", "Senior Teams"). The title, date and shiai-jo letter ("Shiai-jo A") are read from the sheet.
+- **Pools and the fight order** are taken exactly as written ("1 – 2", "2 – 3"…). Bracket pairings such as "A1 – B1, B2 – A2" are used for the elimination. A category with a single pool and no bracket gets its podium from the pool ranking.
+- Team-composition sheets (team name, then members) become team categories; their pools are drawn by the app.
+- The preview lets you untick, rename, move a category to other shiai-jo, and change minutes, team size, pool size and qualifiers. Categories that cannot be created (e.g. a team without members) start unticked with the reason shown.
+- During the day, every shiai-jo fights its categories in order: when one category's matches on that court are done (or waiting for Pool Review), the next one starts. The operator can load any match by hand. A started match is never interrupted.
+- The Pools, Bracket and Participants tabs have a **category selector**. The TV and stream overlay show the category name. Results and diplomas are saved per category as soon as it finishes.
+
+### A single tournament
+
 1. **Setup**: enter the name, date, mode (individual, or teams of 3/4/5), pool size, qualifiers per pool, match times and number of courts. Add participants by hand or with **Import CSV / Excel…** (see `samples/`). Tick **Here** for everyone who checks in; once anyone is ticked, absent people are left out of the draw.
    - Recognised columns: `Name` (or `First name` + `Last name`), `Dojo`/`Club`, `Country`, `Team`, `Grade`, `Seed`. German, French and Bulgarian header names work too. CSV with `,` or `;` and `.xlsx` (first sheet) are supported.
    - **Country** accepts names or codes in many spellings (`Bulgaria`, `BGR`, `България`) and is stored as the **IOC code** (`BUL`, `SRB`, `GER`).
@@ -37,18 +50,19 @@ Installers are not code-signed, so Windows SmartScreen and macOS Gatekeeper will
 2. **Pools**: the draw spreads seeded entrants first and keeps dojo mates apart. The round-robin fight order is interleaved across pools, so fighters rest between matches.
 3. **Pool Review** (Pools tab): standings are ranked by wins › (team: bouts won) › ippons scored › ippons conceded › head-to-head. An absolute tie on a qualifying place is flagged with **Generate Tie-Breaker Match**: an ippon-shobu with Encho (representatives in team mode). **Lock Pools & Generate Brackets** is enabled once every pool match is approved and no ties remain.
 4. **Bracket**: pool winners are seeded first, and same-pool qualifiers go to opposite halves. Byes are handled, and winners advance automatically. A level team encounter (wins and ippons) gets a **daihyo-sen**, where the operator picks one representative per team.
-5. **When the final is approved**, the results are saved automatically to `Documents/Kendo Tournament Manager/<date> <name>/`:
+5. **When the final is approved**, the results are saved automatically to `Documents/Kendo Tournament Manager/<date> <name>/<category>/`:
    - `results.pdf` and `results.csv`.
    - `diplomas/`: one PDF each for 1st, 2nd and both semi-final losers (3rd); in team mode, one for every team member.
    - `captain-pins.pdf` (team mode).
 
    **Settings → Export results now** does the same at any time. For a custom diploma design, put `diploma-template.png` (A4 landscape) into the app's data folder; the text is printed on it.
-6. **Close tournament** archives it to `archive/` in the data folder before starting a new one.
+6. **Close competition** archives it to `archive/` in the data folder before starting a new one.
 
 ### Changing a running tournament (Participants tab, match order)
 
 - **Edit** names, dojos, countries and grades at any time.
 - **Withdraw** someone: if nobody in their pool has fought yet, they simply leave the pool. Otherwise their remaining matches are lost by **kiken** (the opponent wins 2–0). In the bracket, the opponent advances.
+- **Remove from group** (pool phase only): deletes the person or team from their pool together with all their pool matches, played ones too, as if they had never been drawn. Use **Withdraw** instead when results against them should stand.
 - **Late entry** (pool phase): joins the smallest pool and gets a match against every member.
 - **Edit result** (✎ in the match order) corrects an approved match. Pool results can change until the pools are locked. A bracket result can change who advances only while the next round has not started.
 - **Teams**: rename, add or remove members, set the default order, and set the order for a specific encounter. Each order locks when that encounter's first bout starts. Captains can also send it from their phone (see Online results), and the table can always override it.

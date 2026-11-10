@@ -69,8 +69,8 @@ export class Store {
   }
 
   private isClockRunning(): boolean {
-    const t = this.state.tournament
-    return Boolean(t?.courts.some((c) => (c.activeMatchId ? t.matches[c.activeMatchId]?.timer.runningSince != null : false)))
+    const comp = this.state.competition
+    return Boolean(comp?.categories.some((t) => Object.values(t.matches).some((m) => m.timer.runningSince !== null)))
   }
 
   private commit(state: AppState, now: number): void {

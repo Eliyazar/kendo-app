@@ -213,6 +213,29 @@ export function withdrawEntrant(t: Tournament, entrantId: Id, now: number): Tour
   return fillCourts(t)
 }
 
+/**
+ * Remove an entrant from their pool as if they had never been entered: all
+ * their pool and tie-breaker matches are deleted, played ones included, so the
+ * standings of the others are recalculated without them. Pool phase only.
+ */
+export function removeEntrant(t: Tournament, entrantId: Id): Tournament {
+  if (t.phase !== 'pools') throw new RuleError('Removing is only possible during the pool phase. Use Withdraw in the elimination.')
+  const team = t.mode === 'team' ? t.teams[entrantId] : undefined
+  if (t.mode === 'team' ? !team : !t.players[entrantId]) throw new RuleError('Unknown participant.')
+  const theirs = poolMeetingsOf(t, entrantId)
+  const live = theirs.find((m) => m.timer.runningSince !== null || m.status === 'awaiting-confirmation')
+  if (live) throw new RuleError('One of their matches is running or waiting for approval. Finish or pause it first.')
+  t = dropMeetings(t, new Set(theirs.map((m) => m.id)))
+  const players = { ...t.players }
+  const teams = { ...t.teams }
+  if (team) {
+    team.members.forEach((id) => delete players[id])
+    delete teams[entrantId]
+  } else delete players[entrantId]
+  t = { ...t, players, teams, pools: t.pools.map((p) => ({ ...p, entrantIds: p.entrantIds.filter((id) => id !== entrantId) })) }
+  return fillCourts(t)
+}
+
 export function editPlayer(t: Tournament, playerId: Id, patch: PersonInput): Tournament {
   const p = t.players[playerId]
   if (!p) throw new RuleError('Unknown participant.')

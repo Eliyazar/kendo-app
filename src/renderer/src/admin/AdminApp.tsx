@@ -3,8 +3,9 @@
 import { useEffect, useState } from 'react'
 import type { AdminAction, AdminSnapshot, Notice } from '@shared/ipc'
 import { champion } from '@shared/public-view'
-import { poolsComplete } from '@shared/standings'
-import type { Match, Side, Tournament } from '@shared/types'
+import { onCourt } from '@shared/competition'
+import { poolMatchesComplete } from '@shared/standings'
+import type { Competition, Match, Side, Tournament } from '@shared/types'
 import { ScaledStage } from '../components/ScaledStage'
 import { Scoreboard } from '../components/Scoreboard'
 import { BracketView } from './BracketView'
@@ -87,31 +88,56 @@ function RepresentativePicker({ t, match, send }: { t: Tournament; match: Match;
   )
 }
 
-function IdleBoard({ t, courtId, onReview }: { t: Tournament; courtId: string | null; onReview: () => void }) {
-  const champ = champion(t)
-  const busyElsewhere = t.courts.filter((c) => c.id !== courtId && c.activeMatchId).length
+/** Free court: categories waiting for Pool Review, champions, or what the other courts do. */
+function IdleBoard({ comp, courtId, onReview }: { comp: Competition; courtId: string | null; onReview: (categoryId: string) => void }) {
+  const waiting = comp.categories.filter((c) => c.phase === 'pools' && poolMatchesComplete(c))
+  const finished = comp.categories.filter((c) => c.phase === 'finished' && champion(c))
+  const busyElsewhere = comp.courts.filter((c) => c.id !== courtId && onCourt(comp, c.id)?.match).length
   return (
-    <section className="flex flex-1 flex-col items-center justify-center gap-3 rounded-2xl border border-line bg-surface p-6 text-center">
-      {champ ? (
-        <>
-          <div className="text-4xl">🏆</div>
-          <div className="display text-3xl font-bold">{champ.name}</div>
-          <div className="text-muted">{champ.dojo} — tournament champion</div>
-        </>
-      ) : t.phase === 'pools' && poolsComplete(t) ? (
-        <>
-          <div className="text-xl font-black">All pool matches are done</div>
-          <p className="text-muted">Review the standings, break any ties, then lock the pools.</p>
-          <button onClick={onReview} className="mt-2 rounded-xl bg-emerald-600 px-6 py-3 font-bold hover:bg-emerald-500">
-            Open Pool Review
+    <section className="flex flex-1 flex-col items-center justify-center gap-3 overflow-y-auto rounded-2xl border border-line bg-surface p-6 text-center">
+      {waiting.map((c) => (
+        <div key={c.id} className="flex w-full max-w-md items-center gap-3 rounded-xl bg-surface-2 px-4 py-3 text-left">
+          <span className="flex-1">
+            <b>{c.name}</b>
+            <span className="block text-sm text-muted">All pool matches done: review, break ties, lock the pools.</span>
+          </span>
+          <button onClick={() => onReview(c.id)} className="rounded-lg bg-emerald-600 px-4 py-2 font-bold hover:bg-emerald-500">
+            Pool Review
           </button>
-        </>
-      ) : busyElsewhere ? (
-        <div className="text-muted">No more matches for this court right now. {busyElsewhere} other court(s) still fighting.</div>
-      ) : (
-        <div className="text-muted">No match loaded. Pick one from the match order.</div>
+        </div>
+      ))}
+      {!waiting.length &&
+        finished.slice(-3).map((c) => (
+          <div key={c.id}>
+            <div className="text-xs font-bold tracking-widest text-hansoku uppercase">🏆 {c.name}</div>
+            <div className="display text-2xl font-bold">{champion(c)!.name}</div>
+          </div>
+        ))}
+      {!waiting.length && !finished.length && (
+        <div className="text-muted">
+          {busyElsewhere ? `No more matches for this court right now. ${busyElsewhere} other court(s) still fighting.` : 'No match loaded. Pick one from the match order.'}
+        </div>
       )}
     </section>
+  )
+}
+
+/** Category chips for the Pools, Bracket and Participants tabs. */
+function CategoryPicker({ comp, value, onChange }: { comp: Competition; value: string; onChange: (id: string) => void }) {
+  if (comp.categories.length < 2) return null
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {comp.categories.map((c) => (
+        <button
+          key={c.id}
+          onClick={() => onChange(c.id)}
+          className={`rounded-full px-3 py-1 text-sm font-semibold ${c.id === value ? 'bg-hansoku text-ink' : 'bg-surface text-white/70 hover:text-white'}`}
+        >
+          {c.name}
+          <span className="ml-1.5 text-xs opacity-60">{PHASE_LABEL[c.phase]}</span>
+        </button>
+      ))}
+    </div>
   )
 }
 
@@ -164,10 +190,14 @@ export function AdminApp() {
   const [closeArmed, confirmClose] = useConfirm(4000)
   const fire = (a: AdminAction): void => void send(a)
 
-  const t = snap?.state.tournament ?? null
+  const comp = snap?.state.competition ?? null
   const courtId = snap?.courtId ?? null
-  const activeId = t?.courts.find((c) => c.id === courtId)?.activeMatchId
-  const match = activeId ? t?.matches[activeId] : undefined
+  const on = comp && courtId ? onCourt(comp, courtId) : undefined
+  // The category fighting on this court (shiai-jo tab), and the one chosen for the other tabs.
+  const courtCategory = on?.category ?? null
+  const match = on?.match
+  const [picked, setPicked] = useState<string | null>(null)
+  const t = comp?.categories.find((c) => c.id === picked) ?? courtCategory ?? comp?.categories[0] ?? null
   const pm = snap?.publicView.match ?? null
   const client = snap?.settings.court.role === 'client'
   useShortcuts(match, tab === 'match', fire)
@@ -182,8 +212,8 @@ export function AdminApp() {
   const repsMissing = Boolean(match?.representative && (!match.aka.playerId || !match.shiro.playerId))
   const scoring = Boolean(match && isScoring(match) && !repsMissing)
   const canFusen = Boolean(match && notStarted(match) && !repsMissing)
-  const tabs: Tab[] = t ? ['match', 'pools', 'bracket', 'participants', 'settings'] : ['match', 'settings']
-  const courtName = t && t.courts.length > 1 ? t.courts.find((c) => c.id === courtId)?.name : null
+  const tabs: Tab[] = comp ? ['match', 'pools', 'bracket', 'participants', 'settings'] : ['match', 'settings']
+  const courtName = comp && comp.courts.length > 1 ? comp.courts.find((c) => c.id === courtId)?.name : null
 
   return (
     <div className="flex h-full flex-col gap-4 p-4">
@@ -192,18 +222,21 @@ export function AdminApp() {
         <div className="min-w-0">
           <div className="text-xs font-semibold tracking-widest text-muted uppercase">Kendo Tournament Manager</div>
           <div className="truncate text-lg font-bold">
-            {t ? t.name : client ? 'Court laptop' : 'New tournament'}
-            {t && <span className="ml-3 rounded bg-white/10 px-2 py-0.5 text-xs font-semibold text-white/60 uppercase">{PHASE_LABEL[t.phase]}</span>}
+            {comp ? comp.name : client ? 'Court laptop' : 'New competition'}
+            {comp && comp.categories.length === 1 && t && (
+              <span className="ml-3 rounded bg-white/10 px-2 py-0.5 text-xs font-semibold text-white/60 uppercase">{PHASE_LABEL[t.phase]}</span>
+            )}
             {courtName && <span className="ml-2 rounded bg-hansoku px-2 py-0.5 text-xs font-bold text-ink uppercase">{courtName}</span>}
+            {courtCategory && comp && comp.categories.length > 1 && <span className="ml-2 text-sm font-normal text-muted">{courtCategory.name}</span>}
           </div>
         </div>
 
-        <nav className="ml-4 flex gap-1 rounded-xl bg-surface p-1">
+        <nav className="ml-4 flex shrink-0 gap-1 rounded-xl bg-surface p-1">
           {tabs.map((k) => (
             <button
               key={k}
               onClick={() => setTab(k)}
-              className={`rounded-lg px-3.5 py-1.5 text-sm font-bold ${tab === k ? 'bg-white text-ink' : 'text-white/60 hover:text-white'}`}
+              className={`rounded-lg px-3.5 py-1.5 text-sm font-bold whitespace-nowrap ${tab === k ? 'bg-white text-ink' : 'text-white/60 hover:text-white'}`}
             >
               {k === 'match' && !t ? (client ? 'Court' : 'Setup') : TAB_LABEL[k]}
             </button>
@@ -220,13 +253,13 @@ export function AdminApp() {
             </button>
           </div>
         )}
-        {t && !client && (
+        {comp && !client && (
           <button
             onClick={() => confirmClose(() => fire({ type: 'RESET_TOURNAMENT' }))}
-            className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${closeArmed ? 'bg-red-600' : 'text-muted hover:bg-neutral-800 hover:text-white'}`}
-            title="The tournament is archived, then a new one can be set up"
+            className={`shrink-0 rounded-lg px-3 py-1.5 text-sm font-semibold whitespace-nowrap ${closeArmed ? 'bg-red-600' : 'text-muted hover:bg-neutral-800 hover:text-white'}`}
+            title="The competition is archived, then a new one can be set up"
           >
-            {closeArmed ? 'Click again to close tournament' : 'Close tournament'}
+            {closeArmed ? 'Click again to close competition' : 'Close competition'}
           </button>
         )}
       </header>
@@ -239,10 +272,10 @@ export function AdminApp() {
 
       {tab === 'settings' && snap ? (
         <SettingsView snap={snap} save={saveSettings} />
-      ) : !t ? (
+      ) : !comp || !t ? (
         client ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-line text-muted">
-            <p>{snap?.courtLink.connected ? 'Connected. The host has no tournament yet.' : 'Waiting for the host laptop…'}</p>
+            <p>{snap?.courtLink.connected ? 'Connected. The host has no competition yet.' : 'Waiting for the host laptop…'}</p>
             <button onClick={() => setTab('settings')} className="rounded-lg bg-surface-2 px-4 py-2 font-semibold text-white hover:bg-neutral-700">
               Connection settings
             </button>
@@ -250,12 +283,11 @@ export function AdminApp() {
         ) : (
           <SetupScreen send={send} devMode={snap?.devMode ?? false} />
         )
-      ) : tab === 'pools' ? (
-        <PoolsView t={t} send={fire} />
-      ) : tab === 'bracket' ? (
-        <BracketView t={t} />
-      ) : tab === 'participants' ? (
-        <ParticipantsView t={t} send={send} />
+      ) : tab === 'pools' || tab === 'bracket' || tab === 'participants' ? (
+        <div className="flex min-h-0 flex-1 flex-col gap-3">
+          <CategoryPicker comp={comp} value={t.id} onChange={setPicked} />
+          {tab === 'pools' ? <PoolsView t={t} send={fire} /> : tab === 'bracket' ? <BracketView t={t} /> : <ParticipantsView t={t} send={send} />}
+        </div>
       ) : (
         <div className="flex min-h-0 flex-1 gap-4">
           <div className="flex min-w-0 flex-1 flex-col gap-4">
@@ -269,10 +301,21 @@ export function AdminApp() {
                   <Scoreboard view={snap?.publicView ?? null} />
                 </ScaledStage>
               </section>
-              {match ? <TimerPanel match={match} now={now} send={fire} /> : <IdleBoard t={t} courtId={courtId} onReview={() => setTab('pools')} />}
+              {match ? (
+                <TimerPanel match={match} now={now} send={fire} />
+              ) : (
+                <IdleBoard
+                  comp={comp}
+                  courtId={courtId}
+                  onReview={(id) => {
+                    setPicked(id)
+                    setTab('pools')
+                  }}
+                />
+              )}
             </div>
 
-            {match && needsReps && <RepresentativePicker t={t} match={match} send={fire} />}
+            {match && needsReps && courtCategory && <RepresentativePicker t={courtCategory} match={match} send={fire} />}
 
             {match && pm && (
               <div className="flex min-h-0 flex-1 gap-4">
@@ -281,7 +324,7 @@ export function AdminApp() {
               </div>
             )}
           </div>
-          <MatchQueue t={t} courtId={courtId} send={send} />
+          <MatchQueue comp={comp} courtId={courtId} send={send} />
         </div>
       )}
 

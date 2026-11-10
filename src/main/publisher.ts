@@ -1,5 +1,5 @@
-// Publishes the tournament to the online results page and pulls captains'
-// team orders. Never blocks the tournament: failures only change the status.
+// Publishes the competition to the online results page and pulls captains'
+// team orders. Never blocks the competition: failures only change the status.
 
 import type { AdminAction, DispatchResult, OnlineStatus } from '@shared/ipc'
 import { openLineups, pinHash, slugFor, toPublished, type LineupSubmission, type PublishPayload } from '@shared/published'
@@ -53,7 +53,7 @@ export class Publisher {
 
   getStatus(): OnlineStatus {
     const { enabled, url } = this.deps.config()
-    const t = this.deps.getState().tournament
+    const t = this.deps.getState().competition
     const publicUrl = enabled && url && t ? `${url}/t/${slugFor(t)}` : null
     return enabled ? { ...this.status, publicUrl } : { state: 'off', lastPublishedAt: null, publicUrl: null }
   }
@@ -78,7 +78,7 @@ export class Publisher {
   private async publish(): Promise<void> {
     const { enabled, url, key } = this.deps.config()
     const state = this.deps.getState()
-    const t = state.tournament
+    const t = state.competition
     if (!enabled || !url || !key || !t) {
       this.dirty = false
       return
@@ -88,7 +88,7 @@ export class Publisher {
     try {
       const snapshot = toPublished(state, Date.now())!
       const salt = t.id
-      const pinHashes = Object.fromEntries(await Promise.all(Object.values(t.teams).map(async (team) => [team.id, await pinHash(salt, team.id, team.pin)])))
+      const pinHashes = Object.fromEntries(await Promise.all(t.categories.flatMap((c) => Object.values(c.teams)).map(async (team) => [team.id, await pinHash(salt, team.id, team.pin)])))
       const payload: PublishPayload = { slug: slugFor(t), snapshot, secret: { salt, pinHashes, openLineups: openLineups(t) } }
       await request(`${url}/api/publish`, key, { method: 'POST', body: payload })
       this.failures = 0
@@ -107,15 +107,15 @@ export class Publisher {
   /** Apply captains' order submissions, then acknowledge them. */
   private async pullInbox(): Promise<void> {
     const { enabled, url, key } = this.deps.config()
-    const t = this.deps.getState().tournament
-    if (!enabled || !url || !key || !t || t.mode !== 'team') return
+    const t = this.deps.getState().competition
+    if (!enabled || !url || !key || !t || !t.categories.some((c) => c.mode === 'team')) return
     try {
       const slug = slugFor(t)
       const inbox = (await request(`${url}/api/admin/${slug}/inbox`, key, { method: 'GET' })) as { submissions?: LineupSubmission[] }
       const subs = inbox.submissions ?? []
       if (!subs.length) return
       for (const s of subs) {
-        const team = t.teams[s.teamId]?.name ?? 'A team'
+        const team = t.categories.find((c) => c.teams[s.teamId])?.teams[s.teamId]?.name ?? 'A team'
         const r = this.deps.dispatch({ type: 'SET_LINEUP', teamMatchId: s.teamMatchId, teamId: s.teamId, lineup: s.lineup })
         this.deps.notice(r.ok ? `${team}: captain's order received and applied.` : `${team}: captain's order not applied — ${r.error}`, r.ok ? 'info' : 'warn')
       }

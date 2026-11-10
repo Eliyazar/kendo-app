@@ -30,27 +30,35 @@ export function validatePublishPayload(body: unknown): Checked<PublishPayload> {
   if (!isSlug(body.slug)) return fail('Invalid slug (use 6-32 lowercase letters or digits)')
   const snap = body.snapshot
   if (!isRecord(snap)) return fail('Missing snapshot')
-  if (snap.version !== 1) return fail('Unsupported snapshot version')
+  if (snap.version !== 2) return fail('Unsupported snapshot version')
   if (!isFiniteNumber(snap.publishedAt)) return fail('Invalid snapshot.publishedAt')
   const tour = snap.tournament
-  if (!isRecord(tour)) return fail('Missing snapshot.tournament')
-  if (!isString(tour.name) || (tour.mode !== 'individual' && tour.mode !== 'team')) return fail('Invalid snapshot.tournament')
-  if (tour.teamSize !== undefined && (!Number.isInteger(tour.teamSize) || (tour.teamSize as number) < 1 || (tour.teamSize as number) > 16)) {
-    return fail('Invalid snapshot.tournament.teamSize')
+  if (!isRecord(tour) || !isId(tour.id) || !isString(tour.name) || !isString(tour.date)) return fail('Invalid snapshot.tournament')
+  if (!Array.isArray(snap.courts)) return fail('snapshot.courts must be an array')
+  if (!Array.isArray(snap.categories)) return fail('snapshot.categories must be an array')
+  for (const c of snap.courts as unknown[]) {
+    if (!isRecord(c) || !isId(c.id) || !isString(c.name) || !isRecord(c.view)) return fail('Invalid court')
+    if (c.categoryId !== null && !isId(c.categoryId)) return fail('Invalid court.categoryId')
   }
-  for (const key of ['courts', 'players', 'teams', 'pools', 'matches', 'encounters', 'podium'] as const) {
-    if (!Array.isArray(snap[key])) return fail(`snapshot.${key} must be an array`)
-  }
-  if (snap.bracket !== null && !isRecord(snap.bracket)) return fail('Invalid snapshot.bracket')
 
-  for (const c of snap.courts as unknown[]) if (!isRecord(c) || !isId(c.id) || !isString(c.name) || !isRecord(c.view)) return fail('Invalid court')
-  for (const t of snap.teams as unknown[]) {
-    if (!isRecord(t) || !isId(t.id) || !isString(t.name) || !Array.isArray(t.members) || !t.members.every(isId)) return fail('Invalid team')
-  }
-  for (const p of snap.players as unknown[]) if (!isRecord(p) || !isId(p.id) || !isString(p.name)) return fail('Invalid player')
-  for (const m of snap.matches as unknown[]) if (!isRecord(m) || !isId(m.id) || !isFiniteNumber(m.order)) return fail('Invalid match')
-  for (const e of snap.encounters as unknown[]) {
-    if (!isRecord(e) || !isId(e.id) || !isId(e.akaTeamId) || !isId(e.shiroTeamId) || !isString(e.label)) return fail('Invalid encounter')
+  for (const cat of snap.categories as unknown[]) {
+    if (!isRecord(cat) || !isId(cat.id) || !isString(cat.name)) return fail('Invalid category')
+    if (cat.mode !== 'individual' && cat.mode !== 'team') return fail('Invalid category.mode')
+    if (cat.teamSize !== undefined && (!Number.isInteger(cat.teamSize) || (cat.teamSize as number) < 1 || (cat.teamSize as number) > 16)) {
+      return fail('Invalid category.teamSize')
+    }
+    for (const key of ['players', 'teams', 'pools', 'matches', 'encounters', 'podium'] as const) {
+      if (!Array.isArray(cat[key])) return fail(`category.${key} must be an array`)
+    }
+    if (cat.bracket !== null && !isRecord(cat.bracket)) return fail('Invalid category.bracket')
+    for (const t of cat.teams as unknown[]) {
+      if (!isRecord(t) || !isId(t.id) || !isString(t.name) || !Array.isArray(t.members) || !t.members.every(isId)) return fail('Invalid team')
+    }
+    for (const p of cat.players as unknown[]) if (!isRecord(p) || !isId(p.id) || !isString(p.name)) return fail('Invalid player')
+    for (const m of cat.matches as unknown[]) if (!isRecord(m) || !isId(m.id) || !isFiniteNumber(m.order)) return fail('Invalid match')
+    for (const e of cat.encounters as unknown[]) {
+      if (!isRecord(e) || !isId(e.id) || !isId(e.akaTeamId) || !isId(e.shiroTeamId) || !isString(e.label)) return fail('Invalid encounter')
+    }
   }
 
   const sec = body.secret

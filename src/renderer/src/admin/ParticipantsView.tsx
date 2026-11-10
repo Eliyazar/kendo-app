@@ -44,6 +44,20 @@ function WithdrawButton({ onConfirm }: { onConfirm: () => void }) {
   )
 }
 
+/** Deletes the entrant from the pool together with all their pool matches (pool phase only). */
+function RemoveButton({ onConfirm }: { onConfirm: () => void }) {
+  const [armed, confirm] = useConfirm(4000)
+  return (
+    <button
+      onClick={() => confirm(onConfirm)}
+      title="Removes them from the group and deletes all their pool matches, played ones too"
+      className={`rounded-md px-2 py-1 text-xs font-semibold ${armed ? 'bg-red-600 text-white' : 'text-muted hover:bg-neutral-800 hover:text-white'}`}
+    >
+      {armed ? 'Confirm: delete + their matches' : 'Remove from group'}
+    </button>
+  )
+}
+
 function Section({ title, right, children }: { title: string; right?: ReactNode; children: ReactNode }) {
   return (
     <section className="rounded-2xl border border-line bg-surface">
@@ -72,7 +86,7 @@ function AddForm({ t, send, team }: { t: Tournament; send: Send; team: boolean }
       ...(poolId ? { poolId } : {}),
       ...(team ? { members: members.split('\n').map((m) => m.trim()).filter(Boolean).map((m) => ({ name: m })) } : {})
     }
-    if (await send({ type: 'ADD_ENTRANT', entrant })) {
+    if (await send({ type: 'ADD_ENTRANT', entrant, categoryId: t.id })) {
       setName('')
       setDojo('')
       setCountry('')
@@ -145,7 +159,12 @@ function IndividualList({ t, send }: { t: Tournament; send: Send }) {
               {p.withdrawn ? (
                 <span className="text-xs font-semibold text-muted uppercase">Withdrawn</span>
               ) : (
-                t.phase !== 'finished' && <WithdrawButton onConfirm={() => void send({ type: 'WITHDRAW_ENTRANT', entrantId: p.id })} />
+                t.phase !== 'finished' && (
+                  <span className="flex justify-end gap-1">
+                    {t.phase === 'pools' && <RemoveButton onConfirm={() => void send({ type: 'REMOVE_ENTRANT', entrantId: p.id })} />}
+                    <WithdrawButton onConfirm={() => void send({ type: 'WITHDRAW_ENTRANT', entrantId: p.id })} />
+                  </span>
+                )
               )}
             </td>
           </tr>
@@ -271,7 +290,12 @@ function TeamCard({ t, team, send }: { t: Tournament; team: Team; send: Send }) 
         {team.withdrawn ? (
           <span className="text-xs font-semibold text-muted uppercase">Withdrawn</span>
         ) : (
-          t.phase !== 'finished' && <WithdrawButton onConfirm={() => void send({ type: 'WITHDRAW_ENTRANT', entrantId: team.id })} />
+          t.phase !== 'finished' && (
+            <span className="flex justify-end gap-1">
+              {t.phase === 'pools' && <RemoveButton onConfirm={() => void send({ type: 'REMOVE_ENTRANT', entrantId: team.id })} />}
+              <WithdrawButton onConfirm={() => void send({ type: 'WITHDRAW_ENTRANT', entrantId: team.id })} />
+            </span>
+          )
         )}
       </div>
     </div>

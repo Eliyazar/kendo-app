@@ -7,3 +7,6 @@ release/
 Thumbs.db
 .vscode/*
 !.vscode/extensions.json
+
+# Local-only tests (real participant files)
+*.local.test.ts

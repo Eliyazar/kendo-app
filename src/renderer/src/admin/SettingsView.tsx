@@ -65,7 +65,7 @@ function SettingInput({ value, onSave, placeholder, type = 'text' }: { value: st
 
 export function SettingsView({ snap, save }: { snap: AdminSnapshot; save: Save }) {
   const s: AppSettings = snap.settings
-  const t = snap.state.tournament
+  const t = snap.state.competition
   const client = s.court.role === 'client'
   const [exporting, setExporting] = useState(false)
   const [exportMsg, setExportMsg] = useState<string | null>(null)

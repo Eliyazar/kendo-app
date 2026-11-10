@@ -1,19 +1,19 @@
-import type { PublishedSnapshot } from '../../../src/contract'
+import type { PubCategory, PublishedSnapshot } from '../../../src/contract'
 import { Country, Chip, Empty, SectionTitle } from '../components/ui'
 import { buildIndex } from '../lookup'
 
-export function PoolsPage({ snapshot }: { snapshot: PublishedSnapshot }) {
-  if (!snapshot.pools.length) return <Empty>Pools appear once the draw is made.</Empty>
-  const idx = buildIndex(snapshot)
-  const team = snapshot.tournament.mode === 'team'
+export function PoolsPage({ snapshot, category }: { snapshot: PublishedSnapshot; category: PubCategory }) {
+  if (!category.pools.length) return <Empty>Pools appear once the draw is made.</Empty>
+  const idx = buildIndex(snapshot, category)
+  const team = category.mode === 'team'
 
   return (
     <div>
-      {snapshot.pools.map((pool) => {
+      {category.pools.map((pool) => {
         const showTb = pool.standings.some((r) => r.tieBreakWins > 0)
         return (
           <div key={pool.id}>
-            <SectionTitle right={<span className="text-xs text-muted">Top {snapshot.tournament.advancePerPool} advance</span>}>{pool.name}</SectionTitle>
+            <SectionTitle right={<span className="text-xs text-muted">Top {category.advancePerPool} advance</span>}>{pool.name}</SectionTitle>
             <div className="scroll-x rounded-xl border border-line bg-surface">
               <table className="num w-full min-w-[420px] border-collapse text-sm">
                 <thead>
@@ -61,7 +61,7 @@ export function PoolsPage({ snapshot }: { snapshot: PublishedSnapshot }) {
       })}
       <p className="mt-4 text-xs leading-relaxed text-muted">
         W won, D drawn, L lost{team ? ', Bouts = individual bouts won' : ''}, IS ippons scored, IC ippons conceded
-        {snapshot.pools.some((p) => p.standings.some((r) => r.tieBreakWins > 0)) ? ', TB tie-breaker wins' : ''}. Highlighted rows advance; a Tie flag means a place is still being decided.
+        {category.pools.some((p) => p.standings.some((r) => r.tieBreakWins > 0)) ? ', TB tie-breaker wins' : ''}. Highlighted rows advance; a Tie flag means a place is still being decided.
       </p>
     </div>
   )

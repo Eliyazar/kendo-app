@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { PubPerson, PubTeam, PublishedSnapshot, TeamEncounterInfo } from '../../../src/contract'
+import type { PubCategory, PubPerson, PubTeam, PublishedSnapshot, TeamEncounterInfo } from '../../../src/contract'
 import { submitLineup, teamLogin } from '../api'
 import { Card, Chip, Empty, SectionTitle, SideDot } from '../components/ui'
 
@@ -17,8 +17,8 @@ const fieldClass =
   'w-full rounded-xl border border-line bg-surface-2 px-4 py-3 text-base text-ink placeholder:text-muted focus:border-amber/60 focus:outline-none'
 
 /** Position names of an encounter (Senpo, Chuken, …) taken from its published bouts. */
-function positionsFor(snapshot: PublishedSnapshot, teamMatchId: string, size: number): string[] {
-  const bouts = snapshot.matches.filter((m) => m.teamMatchId === teamMatchId).sort((a, b) => a.order - b.order)
+function positionsFor(cat: PubCategory | undefined, teamMatchId: string, size: number): string[] {
+  const bouts = (cat?.matches ?? []).filter((m) => m.teamMatchId === teamMatchId).sort((a, b) => a.order - b.order)
   return Array.from({ length: size }, (_, i) => bouts[i]?.positionLabel ?? `Position ${i + 1}`)
 }
 
@@ -60,6 +60,7 @@ function EncounterEditor({
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-wider text-muted">
+            {enc.categoryName ? `${enc.categoryName} · ` : ''}
             {enc.label}
             {enc.courtName ? ` · ${enc.courtName}` : ''}
           </p>
@@ -113,7 +114,9 @@ function EncounterEditor({
 }
 
 export function CaptainPage({ slug, snapshot }: { slug: string; snapshot: PublishedSnapshot }) {
-  const teams = [...snapshot.teams].filter((t) => !t.withdrawn).sort((a, b) => a.name.localeCompare(b.name))
+  const groups = snapshot.categories
+    .map((c) => ({ id: c.id, name: c.name, teams: c.teams.filter((t) => !t.withdrawn).sort((a, b) => a.name.localeCompare(b.name)) }))
+    .filter((g) => g.teams.length > 0)
   const [teamId, setTeamId] = useState('')
   const [pin, setPin] = useState('')
   const [session, setSession] = useState<Session | null>(null)
@@ -209,10 +212,14 @@ export function CaptainPage({ slug, snapshot }: { slug: string; snapshot: Publis
               <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-muted">Your team</span>
               <select value={teamId} onChange={(e) => setTeamId(e.target.value)} className={fieldClass}>
                 <option value="">Choose a team…</option>
-                {teams.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                  </option>
+                {groups.map((g) => (
+                  <optgroup key={g.id} label={g.name}>
+                    {g.teams.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name}
+                      </option>
+                    ))}
+                  </optgroup>
                 ))}
               </select>
             </label>
@@ -223,10 +230,10 @@ export function CaptainPage({ slug, snapshot }: { slug: string; snapshot: Publis
                 inputMode="numeric"
                 autoComplete="off"
                 maxLength={6}
-                pattern="[0-9]{4}"
+                pattern="[0-9]{6}"
                 placeholder="6 digits"
                 value={pin}
-                onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
                 className={`${fieldClass} num tracking-[0.4em]`}
               />
             </label>
@@ -244,7 +251,8 @@ export function CaptainPage({ slug, snapshot }: { slug: string; snapshot: Publis
     )
   }
 
-  const size = snapshot.tournament.teamSize ?? session.encounters[0]?.lineup.length ?? 0
+  const teamCat = snapshot.categories.find((c) => c.teams.some((t) => t.id === session.teamId))
+  const size = teamCat?.teamSize ?? session.encounters[0]?.lineup.length ?? 0
   return (
     <div className="mx-auto max-w-xl">
       <SectionTitle
@@ -264,7 +272,7 @@ export function CaptainPage({ slug, snapshot }: { slug: string; snapshot: Publis
             <EncounterEditor
               key={enc.teamMatchId}
               enc={enc}
-              positions={positionsFor(snapshot, enc.teamMatchId, size)}
+              positions={positionsFor(teamCat, enc.teamMatchId, size)}
               players={session.players}
               draft={drafts[enc.teamMatchId] ?? enc.lineup}
               busy={busy === enc.teamMatchId}

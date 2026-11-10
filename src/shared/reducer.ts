@@ -1,8 +1,12 @@
-// App-level reducer: routes AdminActions to the right court's match and handles
-// tournament-level changes (setup, editing, approve -> next match, pools -> bracket).
+// Reducers.
+//   Competition level: routes an action to the category it concerns (by court
+//   for scoring, by id for editing) and re-arranges which category each court shows.
+//   Category level: one category's rules (setup, editing, approve -> next match,
+//   pools -> bracket). A category is a Tournament.
 
 import { buildBracket } from './bracket'
-import { activeMatchOn, courtOf, fillCourts, withCourt } from './courts'
+import { arrangeCourts, categoryById, categoryOwning, onCourt, withCategory } from './competition'
+import { activeMatchOn, courtOf, makeCourts, withCourt } from './courts'
 import { createDemoSetup } from './demo'
 import {
   addEntrant,
@@ -11,6 +15,7 @@ import {
   editResult,
   editTeam,
   moveToCourt,
+  removeEntrant,
   removeTeamMember,
   setEncounterLineup,
   setTeamOrder,
@@ -18,12 +23,13 @@ import {
   type ScoreEntry
 } from './editing'
 import { createMeeting, enqueue } from './encounters'
-import type { AdminAction } from './ipc'
+import { uid } from './ids'
+import type { AdminAction, CompetitionSetup } from './ipc'
 import { reduceMatch, RuleError, type MatchAction } from './match-engine'
 import { afterMatchCompleted } from './progress'
-import { createTournament, roundRobin, validateSetup } from './setup'
+import { createTournament, roundRobin, SETUP_LIMITS, validateSetup, type TournamentSetup } from './setup'
 import { poolMatchesComplete, poolsComplete, unresolvedTies } from './standings'
-import { SCHEMA_VERSION, type AppState, type Match, type Tournament } from './types'
+import { SCHEMA_VERSION, type AppState, type Competition, type Match, type Tournament } from './types'
 
 export type AppAction = AdminAction | { type: 'TICK' }
 
@@ -33,19 +39,10 @@ export interface AppUpdate {
   changed: boolean
 }
 
-export const initialState = (): AppState => ({ schemaVersion: SCHEMA_VERSION, tournament: null, revision: 0 })
-
-function withTournament(state: AppState, t: Tournament | null, now: number): AppState {
-  return { ...state, tournament: t && { ...t, updatedAt: now }, revision: state.revision + 1 }
-}
+export const initialState = (): AppState => ({ schemaVersion: SCHEMA_VERSION, competition: null, revision: 0 })
 
 function withMatch(t: Tournament, m: Match): Tournament {
   return { ...t, matches: { ...t.matches, [m.id]: m } }
-}
-
-function requireTournament(t: Tournament | null): Tournament {
-  if (!t) throw new RuleError('No tournament loaded.')
-  return t
 }
 
 function requireActive(t: Tournament, courtId?: string): Match {
@@ -74,152 +71,273 @@ function cleanEntries(v: unknown): ScoreEntry[] {
 
 const BLOCKED_UNTIL_CHOSEN: ReadonlySet<AppAction['type']> = new Set(['TIMER_START', 'ADD_IPPON', 'ADD_HANSOKU', 'FUSEN_GACHI'])
 
-/** Advance every court's clock; returns the same tournament when nothing changed. */
-function tickCourts(t: Tournament, now: number): Tournament {
+const runningClock = (t: Tournament): boolean => Object.values(t.matches).some((m) => m.timer.runningSince !== null)
+
+/** Advance the clocks of a category's loaded matches; returns the same category when nothing changed. */
+function tickCategory(t: Tournament, now: number): Tournament {
   let next = t
   for (const court of t.courts) {
     const m = court.activeMatchId ? next.matches[court.activeMatchId] : undefined
-    if (!m) continue
+    if (!m || m.timer.runningSince === null) continue
     const ticked = reduceMatch(m, { type: 'TICK' }, now)
     if (ticked !== m) next = withMatch(next, ticked)
   }
   return next
 }
 
-export function reduceApp(state: AppState, action: AppAction, now: number): AppUpdate {
-  const t = state.tournament
-  const changed = (next: Tournament | null): AppUpdate => ({ state: withTournament(state, next, now), changed: true })
+// ---------------------------------------------------------------------------
+// Category level
+// ---------------------------------------------------------------------------
 
+type CategoryAction = Exclude<AppAction, { type: 'TICK' | 'DEV_LOAD_DEMO' | 'CREATE_TOURNAMENT' | 'CREATE_COMPETITION' | 'RESET_TOURNAMENT' }>
+
+export function reduceCategory(t: Tournament, action: CategoryAction, now: number): Tournament {
   switch (action.type) {
-    case 'DEV_LOAD_DEMO':
-      if (t) throw new RuleError('Close the current tournament first.')
-      return changed(createTournament(createDemoSetup(now), now))
-
-    case 'CREATE_TOURNAMENT': {
-      if (t) throw new RuleError('Close the current tournament first.')
-      const setup = validateSetup(action.setup)
-      if (typeof setup === 'string') throw new RuleError(setup)
-      return changed(createTournament(setup, now))
-    }
-
-    case 'RESET_TOURNAMENT': {
-      if (!t) return { state, changed: false }
-      if (t.courts.some((c) => (c.activeMatchId ? t.matches[c.activeMatchId]?.timer.runningSince != null : false))) {
-        throw new RuleError('Pause every clock first.')
-      }
-      return changed(null)
-    }
-
     case 'LOAD_MATCH': {
-      const tour = requireTournament(t)
-      const court = courtOf(tour, action.courtId)
-      const target = tour.matches[action.matchId]
+      const court = courtOf(t, action.courtId)
+      const target = t.matches[action.matchId]
       if (!target) throw new RuleError('Unknown match.')
       if (target.status === 'completed') throw new RuleError('That match is already completed.')
-      if (tour.courts.some((c) => c.id !== court.id && c.activeMatchId === target.id)) throw new RuleError('That match is on another court.')
-      const current = activeMatchOn(tour, court.id)
-      if (current && (current.status === 'awaiting-confirmation' || current.timer.runningSince !== null)) {
-        throw new RuleError('Finish or pause the current match before switching.')
-      }
       // Loading a match from another court's list moves it here.
-      const moved = target.courtId === court.id ? tour : moveToCourt(tour, target.id, court.id)
-      return changed(withCourt(moved, { ...courtOf(moved, court.id), activeMatchId: target.id }))
+      const moved = target.courtId === court.id ? t : moveToCourt(t, target.id, court.id)
+      // If it was waiting on another court's slot of this category, free that slot.
+      const freed = { ...moved, courts: moved.courts.map((c) => (c.id !== court.id && c.activeMatchId === target.id ? { ...c, activeMatchId: null } : c)) }
+      return withCourt(freed, { ...courtOf(freed, court.id), activeMatchId: target.id })
     }
 
     case 'SET_REPRESENTATIVE': {
-      const tour = requireTournament(t)
-      const m = requireActive(tour, action.courtId)
+      const m = requireActive(t, action.courtId)
       if (!m.representative || m.status !== 'scheduled') throw new RuleError('This bout has fixed fighters.')
-      const team = m[action.side].teamId ? tour.teams[m[action.side].teamId!] : undefined
+      const team = m[action.side].teamId ? t.teams[m[action.side].teamId!] : undefined
       if (!team?.members.includes(action.playerId)) throw new RuleError('That player is not on this team.')
-      return changed(withMatch(tour, { ...m, [action.side]: { ...m[action.side], playerId: action.playerId } }))
+      return withMatch(t, { ...m, [action.side]: { ...m[action.side], playerId: action.playerId } })
     }
 
     case 'GENERATE_TIE_BREAKER': {
-      let tour = requireTournament(t)
-      if (tour.phase !== 'pools') throw new RuleError('Tie-breakers are only for the pool phase.')
-      if (!poolMatchesComplete(tour)) throw new RuleError('Finish all pool matches first.')
-      const tie = unresolvedTies(tour).find(
-        (g) =>
-          g.poolId === action.poolId &&
-          g.entrantIds.length === action.entrantIds.length &&
-          action.entrantIds.every((id) => g.entrantIds.includes(id))
+      if (t.phase !== 'pools') throw new RuleError('Tie-breakers are only for the pool phase.')
+      if (!poolMatchesComplete(t)) throw new RuleError('Finish all pool matches first.')
+      const tie = unresolvedTies(t).find(
+        (g) => g.poolId === action.poolId && g.entrantIds.length === action.entrantIds.length && action.entrantIds.every((id) => g.entrantIds.includes(id))
       )
       if (!tie) throw new RuleError('There is no such tie to break.')
-      const courtId = Object.values(tour.matches).find((m) => m.poolId === tie.poolId)?.courtId ?? tour.courts[0]!.id
+      const courtId = Object.values(t.matches).find((m) => m.poolId === tie.poolId)?.courtId ?? t.courts[0]!.id
+      let next = t
       for (const [a, b] of roundRobin(tie.entrantIds).flat()) {
-        const s = createMeeting(tour, 'tie-breaker', a, b, { poolId: tie.poolId, courtId })
-        tour = enqueue(s.t, s.boutIds)
+        const s = createMeeting(next, 'tie-breaker', a, b, { poolId: tie.poolId, courtId })
+        next = enqueue(s.t, s.boutIds)
       }
-      return changed(fillCourts(tour))
+      return next
     }
 
     case 'LOCK_POOLS': {
-      const tour = requireTournament(t)
-      if (tour.phase !== 'pools') throw new RuleError('Pools are already locked.')
-      if (!poolsComplete(tour)) throw new RuleError('Finish all pool matches first.')
-      if (unresolvedTies(tour).length) throw new RuleError('Resolve the flagged ties first.')
-      return changed(fillCourts(buildBracket(tour)))
+      if (t.phase !== 'pools') throw new RuleError('Pools are already locked.')
+      if (!poolsComplete(t)) throw new RuleError('Finish all pool matches first.')
+      if (unresolvedTies(t).length) throw new RuleError('Resolve the flagged ties first.')
+      try {
+        return buildBracket(t)
+      } catch (err) {
+        throw err instanceof RuleError ? err : new RuleError(err instanceof Error ? err.message : String(err))
+      }
     }
 
     case 'ADD_ENTRANT':
-      return changed(addEntrant(requireTournament(t), action.entrant))
+      return addEntrant(t, action.entrant)
 
-    case 'WITHDRAW_ENTRANT': {
-      const tour = requireTournament(t)
-      const busy = tour.courts.some((c) => {
-        const m = c.activeMatchId ? tour.matches[c.activeMatchId] : undefined
+    case 'WITHDRAW_ENTRANT':
+    case 'REMOVE_ENTRANT': {
+      const busy = t.courts.some((c) => {
+        const m = c.activeMatchId ? t.matches[c.activeMatchId] : undefined
         return m?.timer.runningSince != null && [m.aka.playerId, m.shiro.playerId, m.aka.teamId, m.shiro.teamId].includes(action.entrantId)
       })
       if (busy) throw new RuleError('Pause the clock of their match first.')
-      return changed(withdrawEntrant(tour, action.entrantId, now))
+      return action.type === 'WITHDRAW_ENTRANT' ? withdrawEntrant(t, action.entrantId, now) : removeEntrant(t, action.entrantId)
     }
 
     case 'EDIT_PLAYER':
-      return changed(editPlayer(requireTournament(t), action.playerId, action.patch ?? { name: '' }))
+      return editPlayer(t, action.playerId, action.patch ?? { name: '' })
 
     case 'EDIT_TEAM':
-      return changed(editTeam(requireTournament(t), action.teamId, action.patch ?? { name: '' }))
+      return editTeam(t, action.teamId, action.patch ?? { name: '' })
 
     case 'ADD_TEAM_MEMBER':
-      return changed(addTeamMember(requireTournament(t), action.teamId, action.member ?? { name: '' }))
+      return addTeamMember(t, action.teamId, action.member ?? { name: '' })
 
     case 'REMOVE_TEAM_MEMBER':
-      return changed(removeTeamMember(requireTournament(t), action.teamId, action.playerId))
+      return removeTeamMember(t, action.teamId, action.playerId)
 
     case 'SET_TEAM_ORDER':
       if (!isIdList(action.order, 5)) throw new RuleError('Invalid order.')
-      return changed(setTeamOrder(requireTournament(t), action.teamId, action.order))
+      return setTeamOrder(t, action.teamId, action.order)
 
     case 'SET_LINEUP':
       if (!isIdList(action.lineup, 5)) throw new RuleError('Invalid order.')
-      return changed(setEncounterLineup(requireTournament(t), action.teamMatchId, action.teamId, action.lineup))
+      return setEncounterLineup(t, action.teamMatchId, action.teamId, action.lineup)
 
     case 'EDIT_RESULT':
-      return changed(fillCourts(editResult(requireTournament(t), action.matchId, cleanEntries(action.entries), now)))
+      return editResult(t, action.matchId, cleanEntries(action.entries), now)
 
     case 'MOVE_MATCH':
-      return changed(moveToCourt(requireTournament(t), action.matchId, action.courtId))
-
-    case 'TICK': {
-      if (!t) return { state, changed: false }
-      const next = tickCourts(t, now)
-      return next === t ? { state, changed: false } : changed(next)
-    }
+      return moveToCourt(t, action.matchId, action.courtId)
 
     default: {
-      const tour = requireTournament(t)
       const { courtId, ...matchAction } = action
-      const m = requireActive(tour, courtId)
+      const m = requireActive(t, courtId)
       if (m.representative && (!m.aka.playerId || !m.shiro.playerId) && BLOCKED_UNTIL_CHOSEN.has(action.type)) {
         throw new RuleError('Choose both representatives first.')
       }
       const match = reduceMatch(m, matchAction satisfies MatchAction, now)
-      if (match === m) return { state, changed: false }
-      let next = withMatch(tour, match)
-      // Result is saved; clear this court's board and load its next match.
-      if (action.type === 'APPROVE_MATCH') next = fillCourts(afterMatchCompleted(next, match))
-      return changed(next)
+      if (match === m) return t
+      const next = withMatch(t, match)
+      // Result is saved: progress the team encounter / bracket. The court loads its next match when re-arranged.
+      return action.type === 'APPROVE_MATCH' ? afterMatchCompleted(next, match) : next
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Competition level
+// ---------------------------------------------------------------------------
+
+function validateCompetition(input: unknown): { name: string; date: string; courts: number; categories: (TournamentSetup & { courtLetters?: string[] })[] } | string {
+  if (typeof input !== 'object' || input === null) return 'Invalid competition.'
+  const c = input as Record<string, unknown>
+  const name = typeof c['name'] === 'string' && c['name'].trim() ? c['name'].trim().slice(0, 80) : null
+  if (!name) return 'Competition name is required.'
+  const date = typeof c['date'] === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(c['date']) ? c['date'] : null
+  if (!date) return 'Date is required.'
+  const courts = c['courts']
+  if (!Number.isInteger(courts) || (courts as number) < SETUP_LIMITS.courts[0] || (courts as number) > SETUP_LIMITS.courts[1]) return 'Courts must be 1–4.'
+  if (!Array.isArray(c['categories']) || c['categories'].length < 1 || c['categories'].length > 40) return 'Add at least one category.'
+  const categories: (TournamentSetup & { courtLetters?: string[] })[] = []
+  for (const raw of c['categories'] as unknown[]) {
+    const cat = (raw ?? {}) as Record<string, unknown>
+    const setup = validateSetup({ ...cat, date, courts })
+    if (typeof setup === 'string') return `${typeof cat['name'] === 'string' ? cat['name'] : 'Category'}: ${setup}`
+    const letters = Array.isArray(cat['courtLetters']) ? (cat['courtLetters'] as unknown[]).filter((l): l is string => typeof l === 'string' && /^[A-D]$/.test(l)) : []
+    categories.push(letters.length ? { ...setup, courtLetters: letters } : setup)
+  }
+  return { name, date, courts: courts as number, categories }
+}
+
+function newCompetition(spec: { name: string; date: string; courts: number; categories: (TournamentSetup & { courtLetters?: string[] })[] }, now: number): Competition {
+  const courts = makeCourts(spec.courts, () => uid('court'))
+  const categories = spec.categories.map((setup) => {
+    const courtIds = (setup.courtLetters ?? []).map((l) => courts[l.charCodeAt(0) - 65]?.id).filter((id): id is string => Boolean(id))
+    const { courtLetters: _l, ...rest } = setup
+    return createTournament(courtIds.length ? { ...rest, courtIds } : rest, now, courts)
+  })
+  return arrangeCourts({
+    id: uid('comp'),
+    name: spec.name,
+    date: spec.date,
+    courts: courts.map((c) => ({ id: c.id, name: c.name, categoryId: null })),
+    categories,
+    createdAt: now,
+    updatedAt: now
+  })
+}
+
+/** Category an action concerns: by category id, by the id it names, or the only category. */
+function targetCategory(comp: Competition, action: CategoryAction): Tournament {
+  const a = action as Record<string, unknown>
+  if (typeof a['categoryId'] === 'string') {
+    const c = categoryById(comp, a['categoryId'])
+    if (!c) throw new RuleError('Unknown category.')
+    return c
+  }
+  for (const key of ['matchId', 'teamMatchId', 'entrantId', 'playerId', 'teamId', 'poolId']) {
+    if (typeof a[key] === 'string') {
+      const c = categoryOwning(comp, a[key])
+      if (!c) throw new RuleError('Not found.')
+      return c
+    }
+  }
+  if (comp.categories.length === 1) return comp.categories[0]!
+  throw new RuleError('Choose a category first.')
+}
+
+const COURT_ACTIONS: ReadonlySet<AppAction['type']> = new Set([
+  'TIMER_START',
+  'TIMER_PAUSE',
+  'TIMER_RESET',
+  'TIMER_ADJUST',
+  'ADD_IPPON',
+  'ADD_HANSOKU',
+  'FUSEN_GACHI',
+  'UNDO',
+  'START_ENCHO',
+  'APPROVE_MATCH',
+  'SET_REPRESENTATIVE'
+])
+
+export function reduceApp(state: AppState, action: AppAction, now: number): AppUpdate {
+  const comp = state.competition
+  const commit = (next: Competition | null): AppUpdate => ({
+    state: { ...state, competition: next && { ...arrangeCourts(next), updatedAt: now }, revision: state.revision + 1 },
+    changed: true
+  })
+
+  switch (action.type) {
+    case 'DEV_LOAD_DEMO':
+    case 'CREATE_TOURNAMENT': {
+      if (comp) throw new RuleError('Close the current competition first.')
+      const setup = action.type === 'DEV_LOAD_DEMO' ? createDemoSetup(now) : validateSetup(action.setup)
+      if (typeof setup === 'string') throw new RuleError(setup)
+      return commit(newCompetition({ name: setup.name, date: setup.date, courts: setup.courts, categories: [setup] }, now))
+    }
+
+    case 'CREATE_COMPETITION': {
+      if (comp) throw new RuleError('Close the current competition first.')
+      const spec = validateCompetition(action.setup satisfies CompetitionSetup)
+      if (typeof spec === 'string') throw new RuleError(spec)
+      return commit(newCompetition(spec, now))
+    }
+
+    case 'RESET_TOURNAMENT': {
+      if (!comp) return { state, changed: false }
+      if (comp.categories.some(runningClock)) throw new RuleError('Pause every clock first.')
+      return commit(null)
+    }
+
+    case 'TICK': {
+      if (!comp) return { state, changed: false }
+      let changed = false
+      const categories = comp.categories.map((c) => {
+        const next = tickCategory(c, now)
+        if (next !== c) changed = true
+        return next
+      })
+      return changed ? commit({ ...comp, categories }) : { state, changed: false }
+    }
+
+    case 'LOAD_MATCH': {
+      if (!comp) throw new RuleError('No competition loaded.')
+      const category = categoryOwning(comp, action.matchId)
+      if (!category) throw new RuleError('Unknown match.')
+      const courtId = action.courtId ?? comp.courts[0]!.id
+      const current = onCourt(comp, courtId)?.match
+      if (current && current.id !== action.matchId && (current.status === 'awaiting-confirmation' || current.timer.runningSince !== null)) {
+        throw new RuleError('Finish or pause the current match before switching.')
+      }
+      if (comp.categories.some((c) => c.courts.some((x) => x.id !== courtId && x.activeMatchId === action.matchId) && c.id !== category.id)) {
+        throw new RuleError('That match is on another court.')
+      }
+      const next = withCategory(comp, reduceCategory(category, { ...action, courtId }, now))
+      return commit({ ...next, courts: next.courts.map((s) => (s.id === courtId ? { ...s, categoryId: category.id, pinnedMatchId: action.matchId } : s)) })
+    }
+
+    default: {
+      if (!comp) throw new RuleError('No competition loaded.')
+      if (COURT_ACTIONS.has(action.type)) {
+        const courtId = ('courtId' in action && action.courtId) || comp.courts[0]!.id
+        const on = onCourt(comp, courtId)
+        if (!on?.match) throw new RuleError('No match loaded on this court.')
+        const updated = reduceCategory(on.category, { ...action, courtId } as CategoryAction, now)
+        return updated === on.category ? { state, changed: false } : commit(withCategory(comp, updated))
+      }
+      const category = targetCategory(comp, action)
+      const updated = reduceCategory(category, action, now)
+      return updated === category ? { state, changed: false } : commit(withCategory(comp, updated))
     }
   }
 }

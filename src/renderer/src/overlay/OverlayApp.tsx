@@ -57,7 +57,7 @@ export function OverlayApp() {
           <div key={m.id} className="absolute bottom-[56px] left-1/2 w-[1640px] -translate-x-1/2 animate-rise">
             <div className="mb-2 flex items-center gap-3 px-2">
               <span className="display rounded-md bg-ink/90 px-4 py-1 text-[26px] font-bold tracking-wider text-white">
-                {[m.label, m.positionLabel].filter(Boolean).join(' · ')}
+                {[view?.multiCategory ? view.categoryName : null, m.label, m.positionLabel].filter(Boolean).join(' · ')}
               </span>
               {m.encho && <span className="display rounded-md bg-hansoku px-4 py-1 text-[26px] font-bold text-ink">Encho</span>}
               {m.timeUp && <span className="display animate-pulse rounded-md bg-hansoku px-4 py-1 text-[26px] font-bold text-ink">Time up</span>}

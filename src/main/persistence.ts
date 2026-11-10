@@ -19,7 +19,7 @@ interface Envelope {
 
 export interface LoadResult {
   state: AppState | null
-  /** The previous session did not shut down cleanly and had a tournament loaded. */
+  /** The previous session did not shut down cleanly and had a competition loaded. */
   recovered: boolean
 }
 
@@ -29,14 +29,16 @@ export interface LoadResult {
  * timer is frozen (paused at the current elapsed time) in the saved copy.
  */
 function freezeTimers(state: AppState, now: number): AppState {
-  const t = state.tournament
-  if (!t) return state
-  const matches = { ...t.matches }
-  for (const court of t.courts) {
-    const m = court.activeMatchId ? matches[court.activeMatchId] : undefined
-    if (m && m.timer.runningSince !== null) matches[m.id] = { ...m, timer: pauseTimer(m.timer, now) }
-  }
-  return { ...state, tournament: { ...t, matches } }
+  const comp = state.competition
+  if (!comp) return state
+  const categories = comp.categories.map((t) => {
+    const running = Object.values(t.matches).filter((m) => m.timer.runningSince !== null)
+    if (!running.length) return t
+    const matches = { ...t.matches }
+    for (const m of running) matches[m.id] = { ...m, timer: pauseTimer(m.timer, now) }
+    return { ...t, matches }
+  })
+  return { ...state, competition: { ...comp, categories } }
 }
 
 export class StateFile {
@@ -59,7 +61,7 @@ export class StateFile {
     for (const candidate of [this.file, this.bak]) {
       const env = this.read(candidate)
       if (env) {
-        return { state: env.state, recovered: !env.cleanShutdown && env.state.tournament !== null }
+        return { state: env.state, recovered: !env.cleanShutdown && env.state.competition !== null }
       }
     }
     this.keepOutdated()
@@ -91,9 +93,9 @@ export class StateFile {
     fs.renameSync(this.tmp, this.file)
   }
 
-  /** Keep a copy of a tournament before it is closed. */
+  /** Keep a copy of a competition before it is closed. */
   archive(state: AppState, now: number): void {
-    const t = state.tournament
+    const t = state.competition
     if (!t) return
     const dir = path.join(path.dirname(this.file), 'archive')
     fs.mkdirSync(dir, { recursive: true })

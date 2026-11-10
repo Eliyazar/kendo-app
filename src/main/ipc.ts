@@ -2,11 +2,11 @@
 // Only the Admin window may change state; the Public window is read-only.
 
 import { ipcMain, shell, type BrowserWindow, type IpcMainInvokeEvent } from 'electron'
-import { ADMIN_ACTION_TYPES, IPC, type AdminAction, type AdminSnapshot, type DispatchResult, type ExportResult, type ImportResult } from '@shared/ipc'
+import { ADMIN_ACTION_TYPES, IPC, type AdminAction, type AdminSnapshot, type DispatchResult, type DrawImportResult, type ExportResult, type ImportResult } from '@shared/ipc'
 import type { PublicView } from '@shared/public-view'
 import type { AppContext } from './context'
 import { exportResults } from './export'
-import { importParticipants } from './import'
+import { importDraw, importParticipants } from './import'
 import { mergeSettings } from './settings'
 
 export interface WindowRefs {
@@ -25,6 +25,7 @@ const optCourt = (a: Record<string, unknown>): boolean => a['courtId'] === undef
 const STRING_FIELDS: Partial<Record<AdminAction['type'], string[]>> = {
   LOAD_MATCH: ['matchId'],
   WITHDRAW_ENTRANT: ['entrantId'],
+  REMOVE_ENTRANT: ['entrantId'],
   EDIT_PLAYER: ['playerId'],
   EDIT_TEAM: ['teamId'],
   ADD_TEAM_MEMBER: ['teamId'],
@@ -41,7 +42,8 @@ const OBJECT_FIELDS: Partial<Record<AdminAction['type'], string[]>> = {
   EDIT_PLAYER: ['patch'],
   EDIT_TEAM: ['patch'],
   ADD_TEAM_MEMBER: ['member'],
-  CREATE_TOURNAMENT: ['setup']
+  CREATE_TOURNAMENT: ['setup'],
+  CREATE_COMPETITION: ['setup']
 }
 
 const ARRAY_FIELDS: Partial<Record<AdminAction['type'], [string, number][]>> = {
@@ -86,6 +88,8 @@ export function registerIpc(ctx: AppContext, windows: WindowRefs): void {
   ipcMain.handle(IPC.adminGetState, (e): AdminSnapshot | null => (fromAdmin(e) ? ctx.snapshot() : null))
 
   ipcMain.handle(IPC.adminImport, (e): Promise<ImportResult | null> | null => (fromAdmin(e) ? importParticipants(windows.admin()) : null))
+
+  ipcMain.handle(IPC.adminImportDraw, (e): Promise<DrawImportResult | null> | null => (fromAdmin(e) ? importDraw(windows.admin()) : null))
 
   ipcMain.handle(IPC.adminSetSettings, async (e, patch: unknown): Promise<DispatchResult> => {
     if (!fromAdmin(e)) return { ok: false, error: 'Not allowed.' }

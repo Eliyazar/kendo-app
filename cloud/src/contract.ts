@@ -4,6 +4,7 @@ import type { PubPerson, PubTeam } from '../../src/shared/published'
 export type {
   LineupSubmission,
   PubBracketNode,
+  PubCategory,
   PubCourt,
   PubEncounter,
   PubMatch,
@@ -24,6 +25,7 @@ export type { ScoreMark } from '../../src/shared/match-engine'
 export interface TeamEncounterInfo {
   teamMatchId: string
   label: string
+  categoryName: string
   courtName: string
   opponentTeamName: string
   side: 'aka' | 'shiro'

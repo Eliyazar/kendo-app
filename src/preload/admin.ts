@@ -5,6 +5,7 @@ const bridge: AdminBridge = {
   dispatch: (action) => ipcRenderer.invoke(IPC.adminDispatch, action),
   getState: () => ipcRenderer.invoke(IPC.adminGetState),
   importParticipants: () => ipcRenderer.invoke(IPC.adminImport),
+  importDraw: () => ipcRenderer.invoke(IPC.adminImportDraw),
   setSettings: (patch) => ipcRenderer.invoke(IPC.adminSetSettings, patch),
   exportResults: () => ipcRenderer.invoke(IPC.adminExport),
   openFolder: (folder) => ipcRenderer.invoke(IPC.adminOpenFolder, folder),

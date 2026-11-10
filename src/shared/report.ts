@@ -30,18 +30,22 @@ export interface Diploma {
   dojo: string
   /** Team mode: the team name. */
   team?: string
+  /** Competition name. */
   tournament: string
+  /** Category, e.g. "Veterans individual" (omitted when it equals the competition name). */
+  category?: string
   date: string
 }
 
 /** One diploma per medallist; in team mode one per team member. */
-export function diplomas(t: Tournament): Diploma[] {
+export function diplomas(t: Tournament, competitionName: string = t.name): Diploma[] {
   const out: Diploma[] = []
   for (const { place, entrantId } of podium(t)) {
     const team = t.mode === 'team' ? t.teams[entrantId] : undefined
     const people = team ? team.members.map((id) => t.players[id]!).filter(Boolean) : [t.players[entrantId]!].filter(Boolean)
     for (const p of people) {
-      const d: Diploma = { place, name: p.name, country: p.country ?? team?.country ?? '', dojo: p.dojo, tournament: t.name, date: t.date }
+      const d: Diploma = { place, name: p.name, country: p.country ?? team?.country ?? '', dojo: p.dojo, tournament: competitionName, date: t.date }
+      if (t.name !== competitionName) d.category = t.name
       if (team) d.team = team.name
       out.push(d)
     }
@@ -65,6 +69,7 @@ body { font-family: Georgia, 'Times New Roman', serif; color: #1a1a1a; ${backgro
 .title { font-size: 46pt; letter-spacing: 0.35em; color: #9e1626; margin: 0 }
 .sub { font-size: 14pt; letter-spacing: 0.2em; text-transform: uppercase; color: #555; margin-top: 4mm }
 .place { font-size: 34pt; margin-top: 14mm; font-weight: bold }
+.cat { font-size: 16pt; margin-top: 2mm; letter-spacing: 0.08em; text-transform: uppercase; color: #9e1626 }
 .name { font-size: 40pt; margin-top: 8mm; font-weight: bold }
 .meta { font-size: 16pt; margin-top: 4mm; color: #333 }
 .event { font-size: 18pt; margin-top: 14mm }
@@ -75,6 +80,7 @@ body { font-family: Georgia, 'Times New Roman', serif; color: #1a1a1a; ${backgro
 <h1 class="title">DIPLOMA</h1>
 <div class="sub">Kendo</div>
 <div class="place">${PLACE[d.place]}</div>
+${d.category ? `<div class="cat">${esc(d.category)}</div>` : ''}
 <div class="name">${esc(d.name)}</div>
 <div class="meta">${[d.team ? esc(d.team) : '', d.dojo && d.dojo !== d.team ? esc(d.dojo) : '', country].filter(Boolean).join(' · ')}</div>
 <div class="event">${esc(d.tournament)}</div>
@@ -144,7 +150,7 @@ function bracketList(t: Tournament): string {
   return html
 }
 
-export function reportHtml(t: Tournament): string {
+export function reportHtml(t: Tournament, competitionName: string = t.name): string {
   const final = podium(t)
     .map(({ place, entrantId }) => {
       const who = describeEntrant(t, entrantId)
@@ -156,12 +162,12 @@ export function reportHtml(t: Tournament): string {
 @page { size: A4; margin: 14mm }
 body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 9.5pt; color: #111 }
 h1 { font-size: 20pt; margin: 0 } h2 { font-size: 13pt; border-bottom: 1px solid #999; padding-bottom: 1mm; margin-top: 8mm } h3 { font-size: 11pt; margin: 4mm 0 1mm }
-.sub { color: #555 } table { border-collapse: collapse; width: 100% } th, td { text-align: left; padding: 1mm 1.5mm; border-bottom: 0.2mm solid #ddd; vertical-align: top }
+.sub { color: #555 } .catname { font-size: 14pt; font-weight: bold; color: #9e1626; margin-top: 1mm } table { border-collapse: collapse; width: 100% } th, td { text-align: left; padding: 1mm 1.5mm; border-bottom: 0.2mm solid #ddd; vertical-align: top }
 th { font-size: 8pt; text-transform: uppercase; color: #555 } td small { display: block; color: #666 } .q td { background: #eef7ee }
 .pools { display: grid; grid-template-columns: 1fr 1fr; gap: 4mm } .pool { break-inside: avoid } .c { text-align: center; white-space: nowrap; font-variant-numeric: tabular-nums }
 .w { font-weight: bold } .p { font-weight: bold; width: 25mm } ul { margin: 0; padding-left: 5mm }
 </style></head><body>
-<h1>${esc(t.name)}</h1><div class="sub">${esc(longDate(t.date))} · ${t.mode === 'team' ? `Team tournament (${t.teamSize})` : 'Individual tournament'}</div>
+<h1>${esc(competitionName)}</h1>${t.name !== competitionName ? `<div class="catname">${esc(t.name)}</div>` : ''}<div class="sub">${esc(longDate(t.date))} · ${t.mode === 'team' ? `Team tournament (${t.teamSize})` : 'Individual tournament'}</div>
 ${final ? `<h2>Final standings</h2><table>${final}</table>` : ''}
 <h2>Pools</h2><div class="pools">${poolTables(t)}</div>
 ${t.bracket ? `<h2>Elimination</h2>${bracketList(t)}` : ''}
@@ -173,10 +179,11 @@ ${t.bracket ? `<h2>Elimination</h2>${bracketList(t)}` : ''}
 // Captain PIN slips and CSV
 // ---------------------------------------------------------------------------
 
-export function pinSlipsHtml(t: Tournament, onlineUrl: string | null): string {
-  const slips = Object.values(t.teams)
+export function pinSlipsHtml(categories: Tournament[], competitionName: string, onlineUrl: string | null): string {
+  const slips = categories
+    .flatMap((t) => Object.values(t.teams).map((team) => ({ team, category: categories.length > 1 ? t.name : '' })))
     .map(
-      (team) => `<div class="slip"><div class="t">${esc(team.name)}</div><div>Captain PIN</div><div class="pin">${esc(team.pin)}</div>
+      ({ team, category }) => `<div class="slip">${category ? `<div class="c">${esc(category)}</div>` : ''}<div class="t">${esc(team.name)}</div><div>Captain PIN</div><div class="pin">${esc(team.pin)}</div>
 <div class="h">${onlineUrl ? `Set your team order before each match at<br><b>${esc(onlineUrl)}</b> → Captain` : 'Give your team order to the table before each match.'}</div></div>`
     )
     .join('')
@@ -184,8 +191,8 @@ export function pinSlipsHtml(t: Tournament, onlineUrl: string | null): string {
 @page { size: A4; margin: 10mm } body { font-family: 'Segoe UI', Arial, sans-serif }
 .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6mm }
 .slip { border: 0.4mm dashed #888; padding: 6mm; break-inside: avoid; text-align: center }
-.t { font-size: 15pt; font-weight: bold } .pin { font-size: 30pt; letter-spacing: 0.3em; font-weight: bold; margin: 2mm 0 } .h { font-size: 9pt; color: #444; word-break: break-all }
-</style></head><body><h2>${esc(t.name)} · Captain PINs</h2><div class="grid">${slips}</div></body></html>`
+.c { font-size: 9pt; color: #9e1626; text-transform: uppercase } .t { font-size: 15pt; font-weight: bold } .pin { font-size: 30pt; letter-spacing: 0.3em; font-weight: bold; margin: 2mm 0 } .h { font-size: 9pt; color: #444; word-break: break-all }
+</style></head><body><h2>${esc(competitionName)} · Captain PINs</h2><div class="grid">${slips}</div></body></html>`
 }
 
 const csvCell = (v: string | number): string => {

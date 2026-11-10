@@ -1,5 +1,5 @@
 // Pure helpers over a published snapshot.
-import type { PubMatch, PubSide, PublishedSnapshot } from '../../src/contract'
+import type { PubCategory, PubMatch, PubSide, PublishedSnapshot } from '../../src/contract'
 
 export interface Entrant {
   id: string
@@ -15,9 +15,9 @@ export interface Index {
 }
 
 /** Pool / bracket entrants are teams in team mode, players otherwise. */
-export function buildIndex(s: PublishedSnapshot): Index {
-  const players = new Map(s.players.map((p) => [p.id, p]))
-  const teams = new Map(s.teams.map((t) => [t.id, t]))
+export function buildIndex(s: PublishedSnapshot, cat: PubCategory): Index {
+  const players = new Map(cat.players.map((p) => [p.id, p]))
+  const teams = new Map(cat.teams.map((t) => [t.id, t]))
   const courts = new Map(s.courts.map((c) => [c.id, c.name]))
   return {
     entrant(id) {
@@ -45,22 +45,26 @@ export type Phase = 'upcoming' | 'live' | 'done'
 export const phaseOf = (m: Pick<PubMatch, 'status'>): Phase =>
   m.status === 'completed' ? 'done' : m.status === 'scheduled' ? 'upcoming' : 'live'
 
-/** Matches per court, in fight order, courts in snapshot order. */
-export function matchesByCourt(s: PublishedSnapshot): { courtId: string; courtName: string; matches: PubMatch[] }[] {
+/** A match together with the category it belongs to. */
+export type CatMatch = PubMatch & { categoryName: string }
+
+/** All matches of all categories, per court, in fight order (`order` is comparable across categories), courts in snapshot order. */
+export function matchesByCourt(s: PublishedSnapshot): { courtId: string; courtName: string; matches: CatMatch[] }[] {
+  const all: CatMatch[] = s.categories.flatMap((c) => c.matches.map((m) => ({ ...m, categoryName: c.name })))
   return s.courts.map((c) => ({
     courtId: c.id,
     courtName: c.name,
-    matches: s.matches.filter((m) => m.courtId === c.id).sort((a, b) => a.order - b.order)
+    matches: all.filter((m) => m.courtId === c.id).sort((a, b) => a.order - b.order)
   }))
 }
 
 export const sideText = (s: PubSide): string => `${s.name} ${s.dojo} ${s.country ?? ''}`.toLowerCase()
 
 /** Does a match fit a free-text search? Every word must appear in names, dojo/team, country or label. */
-export function matchFits(m: PubMatch, query: string): boolean {
+export function matchFits(m: PubMatch & { categoryName?: string }, query: string): boolean {
   const words = query.toLowerCase().split(/\s+/).filter(Boolean)
   if (!words.length) return true
-  const hay = `${sideText(m.aka)} ${sideText(m.shiro)} ${m.label} ${m.positionLabel ?? ''}`.toLowerCase()
+  const hay = `${sideText(m.aka)} ${sideText(m.shiro)} ${m.label} ${m.positionLabel ?? ''} ${m.categoryName ?? ''}`.toLowerCase()
   return words.every((w) => hay.includes(w))
 }
 

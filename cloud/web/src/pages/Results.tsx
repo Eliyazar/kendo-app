@@ -1,4 +1,4 @@
-import type { PubMatch, PublishedSnapshot } from '../../../src/contract'
+import type { PubCategory, PubMatch, PublishedSnapshot } from '../../../src/contract'
 import { Country, Empty, MarkString, SectionTitle, SideDot } from '../components/ui'
 import { DECISION_LABEL, buildIndex, type Index } from '../lookup'
 
@@ -52,10 +52,44 @@ function ResultRow({ m }: { m: PubMatch }) {
   )
 }
 
-export function ResultsPage({ snapshot }: { snapshot: PublishedSnapshot }) {
-  const idx = buildIndex(snapshot)
-  const podium = [...snapshot.podium].sort((a, b) => a.place - b.place)
-  const done = snapshot.matches.filter((m) => m.status === 'completed' && m.result).sort((a, b) => b.order - a.order)
+/** Compact podium list of every category. */
+function Overview({ snapshot, onPick }: { snapshot: PublishedSnapshot; onPick: (id: string) => void }) {
+  return (
+    <>
+      <SectionTitle>All categories</SectionTitle>
+      <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface">
+        {snapshot.categories.map((c) => {
+          const idx = buildIndex(snapshot, c)
+          const podium = [...c.podium].sort((a, b) => a.place - b.place)
+          return (
+            <li key={c.id} className="px-4 py-3">
+              <button type="button" onClick={() => onPick(c.id)} className="display text-lg leading-tight hover:text-amber">
+                {c.name}
+              </button>
+              {podium.length ? (
+                <ol className="mt-1.5 space-y-0.5 text-sm">
+                  {podium.map((p, i) => (
+                    <li key={`${p.place}-${p.entrantId}-${i}`} className="flex gap-2">
+                      <span className={`num w-8 shrink-0 font-semibold ${PLACE_STYLE[p.place]!.text}`}>{PLACE_STYLE[p.place]!.label}</span>
+                      <span className="truncate">{idx.entrant(p.entrantId).name}</span>
+                    </li>
+                  ))}
+                </ol>
+              ) : (
+                <p className="mt-1 text-xs text-muted">Not decided yet.</p>
+              )}
+            </li>
+          )
+        })}
+      </ul>
+    </>
+  )
+}
+
+export function ResultsPage({ snapshot, category, onPick }: { snapshot: PublishedSnapshot; category: PubCategory; onPick: (id: string) => void }) {
+  const idx = buildIndex(snapshot, category)
+  const podium = [...category.podium].sort((a, b) => a.place - b.place)
+  const done = category.matches.filter((m) => m.status === 'completed' && m.result).sort((a, b) => b.order - a.order)
 
   return (
     <div>
@@ -80,6 +114,8 @@ export function ResultsPage({ snapshot }: { snapshot: PublishedSnapshot }) {
       ) : (
         <Empty>No completed matches yet.</Empty>
       )}
+
+      {snapshot.categories.length > 1 && <Overview snapshot={snapshot} onPick={onPick} />}
     </div>
   )
 }

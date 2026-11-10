@@ -2,7 +2,7 @@ import { useState } from 'react'
 import type { PubMatch, PubSide, PublishedSnapshot } from '../../../src/contract'
 import { Chip, Country, Empty, Highlight, MarkString, SectionTitle, SideDot } from '../components/ui'
 import { usePersistedString } from '../hooks'
-import { DECISION_LABEL, matchFits, matchesByCourt, phaseOf, type Phase } from '../lookup'
+import { DECISION_LABEL, matchFits, matchesByCourt, phaseOf, type CatMatch, type Phase } from '../lookup'
 
 type Filter = 'all' | 'active' | 'done'
 const FILTERS: { id: Filter; label: string }[] = [
@@ -43,7 +43,7 @@ function StatusChip({ phase, m }: { phase: Phase; m: PubMatch }) {
   return <Chip tone="amber">Upcoming</Chip>
 }
 
-function MatchRow({ m, query }: { m: PubMatch; query: string }) {
+function MatchRow({ m, query, showCategory }: { m: CatMatch; query: string; showCategory: boolean }) {
   const phase = phaseOf(m)
   const r = m.result
   const label = [m.label, m.positionLabel].filter(Boolean).join(' · ')
@@ -56,6 +56,11 @@ function MatchRow({ m, query }: { m: PubMatch; query: string }) {
         </span>
         <StatusChip phase={phase} m={m} />
       </div>
+      {showCategory && (
+        <p className="-mt-1 mb-2 truncate text-[11px] text-muted">
+          <Highlight text={m.categoryName} query={query} />
+        </p>
+      )}
       <div className="grid grid-cols-[1fr_auto] items-center gap-x-3 gap-y-2">
         <Fighter side="aka" s={m.aka} query={query} won={r?.winner === 'aka'} />
         <div className="flex justify-end">{r && <MarkString value={r.akaMarks} />}</div>
@@ -87,6 +92,8 @@ export function SchedulePage({ snapshot }: { snapshot: PublishedSnapshot }) {
     ...g,
     matches: g.matches.filter((m) => matchFits(m, query) && (filter === 'all' || (filter === 'done') === (phaseOf(m) === 'done')))
   }))
+  const showCategory = snapshot.categories.length > 1
+  const totalAll = snapshot.categories.reduce((n, c) => n + c.matches.length, 0)
   const total = groups.reduce((n, g) => n + g.matches.length, 0)
 
   return (
@@ -124,7 +131,7 @@ export function SchedulePage({ snapshot }: { snapshot: PublishedSnapshot }) {
       </div>
 
       {total === 0 ? (
-        <Empty>{snapshot.matches.length ? 'No matches fit your search.' : 'The schedule appears once the draw is made.'}</Empty>
+        <Empty>{totalAll ? 'No matches fit your search.' : 'The schedule appears once the draw is made.'}</Empty>
       ) : (
         groups
           .filter((g) => g.matches.length > 0)
@@ -133,7 +140,7 @@ export function SchedulePage({ snapshot }: { snapshot: PublishedSnapshot }) {
               <SectionTitle right={<span className="num text-xs text-muted">{g.matches.length} matches</span>}>{g.courtName}</SectionTitle>
               <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface">
                 {g.matches.map((m) => (
-                  <MatchRow key={m.id} m={m} query={query} />
+                  <MatchRow key={m.id} m={m} query={query} showCategory={showCategory} />
                 ))}
               </ul>
             </div>

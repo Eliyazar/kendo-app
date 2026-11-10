@@ -46,5 +46,14 @@ export function fillCourts(t: Tournament): Tournament {
   return t
 }
 
-/** Court for the n-th pool / bracket slot: spread round-robin over the courts. */
-export const courtFor = (t: Tournament, index: number): Id => t.courts[index % t.courts.length]!.id
+/** This category's own courts (all courts unless it was given specific ones). */
+export const homeCourts = (t: Tournament): Id[] => {
+  const ids = (t.homeCourtIds ?? []).filter((id) => t.courts.some((c) => c.id === id))
+  return ids.length ? ids : t.courts.map((c) => c.id)
+}
+
+/** Court for the n-th pool / bracket slot: spread round-robin over the category's courts. */
+export const courtFor = (t: Tournament, index: number): Id => {
+  const ids = homeCourts(t)
+  return ids[index % ids.length]!
+}

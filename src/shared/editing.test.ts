@@ -10,7 +10,7 @@ import type { AppState, Side, Tournament } from './types'
 let clock = 5_000_000
 const act = (s: AppState, a: AdminAction | { type: 'TICK' }): AppState => reduceApp(s, a, (clock += 1000)).state
 const fails = (s: AppState, a: AdminAction, msg: RegExp) => expect(() => reduceApp(s, a, clock)).toThrow(msg)
-const tour = (s: AppState): Tournament => s.tournament!
+const tour = (s: AppState): Tournament => s.competition!.categories[0]!
 const activeOn = (s: AppState, court = 0) => {
   const id = tour(s).courts[court]!.activeMatchId
   return id ? tour(s).matches[id]! : undefined

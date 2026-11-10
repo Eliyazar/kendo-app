@@ -1,4 +1,4 @@
-import type { PubBracketNode, PublishedSnapshot } from '../../../src/contract'
+import type { PubBracketNode, PubCategory, PublishedSnapshot } from '../../../src/contract'
 import { Chip, Country, Empty, SideDot } from '../components/ui'
 import { buildIndex, roundName, type Index } from '../lookup'
 
@@ -24,10 +24,10 @@ function EntrantLine({ side, id, node, idx, score }: { side: 'aka' | 'shiro'; id
   )
 }
 
-function NodeCard({ node, snapshot, idx }: { node: PubBracketNode; snapshot: PublishedSnapshot; idx: Index }) {
-  const team = snapshot.tournament.mode === 'team'
-  const enc = team && node.matchId ? snapshot.encounters.find((e) => e.id === node.matchId) : undefined
-  const match = !team && node.matchId ? snapshot.matches.find((m) => m.id === node.matchId) : undefined
+function NodeCard({ node, category, idx }: { node: PubBracketNode; category: PubCategory; idx: Index }) {
+  const team = category.mode === 'team'
+  const enc = team && node.matchId ? category.encounters.find((e) => e.id === node.matchId) : undefined
+  const match = !team && node.matchId ? category.matches.find((m) => m.id === node.matchId) : undefined
   const live = enc ? enc.status === 'in-progress' : match ? match.status === 'in-progress' || match.status === 'awaiting-confirmation' : false
   const akaScore = enc ? (enc.akaTeamId === node.aka ? enc.akaWins : enc.shiroWins) : undefined
   const shiroScore = enc ? (enc.akaTeamId === node.aka ? enc.shiroWins : enc.akaWins) : undefined
@@ -49,12 +49,12 @@ function NodeCard({ node, snapshot, idx }: { node: PubBracketNode; snapshot: Pub
   )
 }
 
-export function BracketPage({ snapshot }: { snapshot: PublishedSnapshot }) {
-  const b = snapshot.bracket
+export function BracketPage({ snapshot, category }: { snapshot: PublishedSnapshot; category: PubCategory }) {
+  const b = category.bracket
   if (!b || !b.nodes.length) return <Empty>The bracket appears once the pools are finished.</Empty>
-  const idx = buildIndex(snapshot)
+  const idx = buildIndex(snapshot, category)
   const rounds = Array.from({ length: b.rounds }, (_, r) => b.nodes.filter((n) => n.round === r).sort((x, y) => x.slot - y.slot))
-  const champion = snapshot.podium.find((p) => p.place === 1)?.entrantId ?? b.nodes.find((n) => !n.next)?.winner ?? null
+  const champion = category.podium.find((p) => p.place === 1)?.entrantId ?? b.nodes.find((n) => !n.next)?.winner ?? null
   const champ = champion ? idx.entrant(champion) : null
 
   return (
@@ -65,7 +65,7 @@ export function BracketPage({ snapshot }: { snapshot: PublishedSnapshot }) {
             <h3 className="display mb-3 text-sm text-muted">{roundName(r, b.rounds)}</h3>
             <div className="flex flex-1 flex-col justify-around gap-3">
               {nodes.map((n) => (
-                <NodeCard key={n.id} node={n} snapshot={snapshot} idx={idx} />
+                <NodeCard key={n.id} node={n} category={category} idx={idx} />
               ))}
             </div>
           </div>

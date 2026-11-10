@@ -1,15 +1,31 @@
-import type { PublishPayload, PublishedSecret, PublishedSnapshot } from '../src/contract'
+import type { PubCategory, PublishPayload, PublishedSecret, PublishedSnapshot } from '../src/contract'
 
 /** A small team tournament: teams A and B (team size 3, one reserve each), one open encounter. */
 export function teamSnapshot(): PublishedSnapshot {
-  const view = { tournamentName: 'Test Cup', courtName: 'Court A', multiCourt: false, match: null, team: null, nextMatch: null, champion: null }
+  const view = { tournamentName: 'Test Cup', categoryName: 'Senior Teams', multiCategory: true, courtName: 'Court A', multiCourt: false, match: null, team: null, nextMatch: null, champion: null }
   const person = (id: string, name: string, teamId: string) => ({ id, name, dojo: teamId === 'tA' ? 'Alpha' : 'Beta', teamId })
   const side = (teamId: string, name: string) => ({ entrantId: teamId, playerId: null, name, dojo: name })
-  return {
-    version: 1,
-    publishedAt: 1_700_000_000_000,
-    tournament: { id: 'tour_x', name: 'Test Cup', date: '2026-10-20', mode: 'team', phase: 'pools', teamSize: 3, advancePerPool: 1 },
-    courts: [{ id: 'c1', name: 'Court A', view }],
+  const individual: PubCategory = {
+    id: 'cat_ind',
+    name: 'Veterans',
+    mode: 'individual',
+    phase: 'pools',
+    advancePerPool: 1,
+    players: [{ id: 'v1', name: 'Vega', dojo: 'Gamma' }],
+    teams: [],
+    pools: [],
+    matches: [],
+    encounters: [],
+    bracket: null,
+    podium: []
+  }
+  const team: PubCategory = {
+    id: 'cat_team',
+    name: 'Senior Teams',
+    mode: 'team',
+    phase: 'pools',
+    teamSize: 3,
+    advancePerPool: 1,
     players: [
       person('a1', 'Aoki', 'tA'),
       person('a2', 'Abe', 'tA'),
@@ -73,6 +89,13 @@ export function teamSnapshot(): PublishedSnapshot {
     ],
     bracket: null,
     podium: []
+  }
+  return {
+    version: 2,
+    publishedAt: 1_700_000_000_000,
+    tournament: { id: 'comp_x', name: 'Test Cup', date: '2026-10-20' },
+    courts: [{ id: 'c1', name: 'Court A', categoryId: 'cat_team', view }],
+    categories: [individual, team]
   }
 }
 

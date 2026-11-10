@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import type { PublishedSnapshot } from '../../src/contract'
+import type { PubCategory, PublishedSnapshot } from '../../src/contract'
 import { Empty, Spinner } from './components/ui'
-import { STALE_AFTER_MS, useNow, useSnapshot } from './hooks'
+import { STALE_AFTER_MS, useCategory, useNow, useSnapshot } from './hooks'
 import { BracketPage } from './pages/Bracket'
 import { CaptainPage } from './pages/Captain'
 import { Landing } from './pages/Landing'
@@ -68,11 +68,32 @@ function StatusPill({ lastOkAt, failing }: { lastOkAt: number | null; failing: b
   )
 }
 
+/** Chips to choose the category shown on Pools, Bracket and Results (hidden when there is only one). */
+function CategoryPicker({ categories, current, onPick }: { categories: PubCategory[]; current: string; onPick: (id: string) => void }) {
+  if (categories.length < 2) return null
+  return (
+    <div className="mb-4 flex gap-1.5 overflow-x-auto" role="group" aria-label="Category">
+      {categories.map((c) => (
+        <button
+          key={c.id}
+          type="button"
+          onClick={() => onPick(c.id)}
+          aria-pressed={current === c.id}
+          className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold ${current === c.id ? 'bg-surface-2 text-ink' : 'text-muted hover:text-ink'}`}
+        >
+          {c.name}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 function Tournament({ slug }: { slug: string }) {
   const live = useSnapshot(slug)
   const [tab, setTab] = useTab()
   const snap: PublishedSnapshot | null = live.snapshot
-  const teamMode = snap?.tournament.mode === 'team'
+  const [category, chooseCategory] = useCategory(slug, snap)
+  const teamMode = Boolean(snap?.categories.some((c) => c.mode === 'team'))
   const tabs: TabId[] = teamMode ? ['live', 'schedule', 'pools', 'bracket', 'results', 'captain'] : ['live', 'schedule', 'pools', 'bracket', 'results']
   const current: TabId = tabs.includes(tab) ? tab : 'live'
 
@@ -95,12 +116,21 @@ function Tournament({ slug }: { slug: string }) {
       <Empty>Cannot reach the results server. Retrying…</Empty>
     )
   } else {
+    const perCategory = (render: (c: PubCategory) => ReactNode): ReactNode =>
+      category ? (
+        <>
+          <CategoryPicker categories={snap.categories} current={category.id} onPick={chooseCategory} />
+          {render(category)}
+        </>
+      ) : (
+        <Empty>No categories yet. Results appear here as soon as the draw is made.</Empty>
+      )
     body = {
       live: <LivePage courts={snap.courts} />,
       schedule: <SchedulePage snapshot={snap} />,
-      pools: <PoolsPage snapshot={snap} />,
-      bracket: <BracketPage snapshot={snap} />,
-      results: <ResultsPage snapshot={snap} />,
+      pools: perCategory((c) => <PoolsPage snapshot={snap} category={c} />),
+      bracket: perCategory((c) => <BracketPage snapshot={snap} category={c} />),
+      results: perCategory((c) => <ResultsPage snapshot={snap} category={c} onPick={chooseCategory} />),
       captain: <CaptainPage slug={slug} snapshot={snap} />
     }[current]
   }

@@ -2,7 +2,7 @@
 //   /overlay?court=A          stream overlay page for OBS (Browser Source)
 //   /api/view?court=A         current public view (JSON)
 //   /api/events?court=A       Server-Sent Events: the public view on every change
-//   /api/court/stream         court laptops: tournament state on every change (join code)
+//   /api/court/stream         court laptops: competition state on every change (join code)
 //   /api/court/dispatch       court laptops: send an action for their court (join code)
 // Read-only for viewers; only the court endpoints change anything, and only with the code.
 
@@ -12,7 +12,7 @@ import os from 'node:os'
 import path from 'node:path'
 import type { AdminAction, DispatchResult, SharingInfo } from '@shared/ipc'
 import { toPublicView } from '@shared/public-view'
-import type { AppState, Tournament } from '@shared/types'
+import type { AppState, Competition } from '@shared/types'
 
 export interface ServerDeps {
   getState(): AppState
@@ -36,13 +36,13 @@ const TYPES: Record<string, string> = {
 }
 
 /** `A`, `B`, … or a court id. */
-export function resolveCourt(t: Tournament | null, ref: string | null): string | undefined {
+export function resolveCourt(t: Competition | null, ref: string | null): string | undefined {
   if (!t || !ref) return t?.courts[0]?.id
   const byLetter = /^[A-Za-z]$/.test(ref) ? t.courts[ref.toUpperCase().charCodeAt(0) - 65] : undefined
   return (byLetter ?? t.courts.find((c) => c.id === ref) ?? t.courts[0])?.id
 }
 
-export const courtLetter = (t: Tournament | null, courtId: string | null): string => {
+export const courtLetter = (t: Competition | null, courtId: string | null): string => {
   const i = t && courtId ? t.courts.findIndex((c) => c.id === courtId) : 0
   return String.fromCharCode(65 + Math.max(0, i))
 }
@@ -111,7 +111,7 @@ export class LocalServer {
 
   /** Court laptops currently connected. */
   clients(): { courtName: string; address: string }[] {
-    const t = this.deps.getState().tournament
+    const t = this.deps.getState().competition
     return [...this.listeners]
       .filter((l) => l.kind === 'court')
       .map((l) => ({ courtName: t?.courts.find((c) => c.id === resolveCourt(t, l.court))?.name ?? '—', address: l.address }))
@@ -126,7 +126,7 @@ export class LocalServer {
   private push(l: Listener, state: AppState): void {
     const body =
       l.kind === 'view'
-        ? JSON.stringify(toPublicView(state, resolveCourt(state.tournament, l.court)))
+        ? JSON.stringify(toPublicView(state, resolveCourt(state.competition, l.court)))
         : JSON.stringify({ state, serverNow: Date.now() })
     if (l.kind === 'view' && body === l.last) return
     l.last = body
@@ -141,7 +141,7 @@ export class LocalServer {
       if (req.method !== 'GET') return this.send(res, 405, 'Method not allowed')
       if (url.pathname === '/api/view') {
         const state = this.deps.getState()
-        return this.json(res, toPublicView(state, resolveCourt(state.tournament, url.searchParams.get('court'))))
+        return this.json(res, toPublicView(state, resolveCourt(state.competition, url.searchParams.get('court'))))
       }
       if (url.pathname === '/api/events') return this.subscribe(req, res, 'view', url.searchParams.get('court'))
       if (url.pathname === '/api/court/stream') {

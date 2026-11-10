@@ -28,6 +28,7 @@ function CourtCard({ court }: { court: PubCourt }) {
   const v: PublicView = court.view
   const m = v.match
   const label = m ? [m.label, m.positionLabel].filter(Boolean).join(' · ') : ''
+  const catName = v.multiCategory ? v.categoryName : null
   const status = !m ? null : m.status === 'in-progress' ? 'live' : m.status === 'scheduled' ? 'next' : m.status === 'awaiting-confirmation' ? 'pending' : 'done'
 
   return (
@@ -35,7 +36,13 @@ function CourtCard({ court }: { court: PubCourt }) {
       <header className="flex items-center justify-between gap-3 border-b border-line px-4 py-3">
         <div className="min-w-0">
           <h2 className="display truncate text-xl leading-tight">{court.name}</h2>
-          {label && <p className="truncate text-xs text-muted">{label}</p>}
+          {(label || catName) && (
+            <p className="truncate text-xs text-muted">
+              {catName && <span className="font-semibold text-ink/80">{catName}</span>}
+              {catName && label && ' · '}
+              {label}
+            </p>
+          )}
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
           {m?.encho && <Chip tone="amber">Encho</Chip>}

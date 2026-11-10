@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { PublishedSnapshot } from '../../src/contract'
+import type { PubCategory, PublishedSnapshot } from '../../src/contract'
 import { fetchSnapshot } from './api'
 
 export const POLL_MS = 3000
@@ -104,4 +104,31 @@ export function usePersistedString(key: string, initial = ''): [string, (v: stri
     }
   }
   return [value, set]
+}
+
+/**
+ * The category shown on Pools / Bracket / Results. The last choice is remembered per tournament slug;
+ * default is the category on court A now, else the first one.
+ */
+export function useCategory(slug: string, snapshot: PublishedSnapshot | null): [PubCategory | null, (id: string) => void] {
+  const key = `kendo-live-category:${slug}`
+  const [stored, setStored] = useState(() => {
+    try {
+      return window.localStorage.getItem(key) ?? ''
+    } catch {
+      return ''
+    }
+  })
+  const cats = snapshot?.categories ?? []
+  const onCourtA = snapshot?.courts[0]?.categoryId
+  const category = cats.find((c) => c.id === stored) ?? cats.find((c) => c.id === onCourtA) ?? cats[0] ?? null
+  const choose = (id: string) => {
+    setStored(id)
+    try {
+      window.localStorage.setItem(key, id)
+    } catch {
+      /* storage unavailable: keep it in memory only */
+    }
+  }
+  return [category, choose]
 }

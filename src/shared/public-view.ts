@@ -2,10 +2,11 @@
 // Deliberately contains NO clock information (anti-stalling rule):
 // the public screen only learns that time is up, never how much is left.
 
-import { activeMatchOn, courtOf, nextScheduledOn } from './courts'
+import { nextOnCourt, onCourt } from './competition'
+import { computeStandings } from './standings'
 import { tallyEncounter } from './encounters'
 import { computeScore, pendingResult, type ScoreMark } from './match-engine'
-import { TEAM_POSITIONS, type AppState, type Competitor, type Match, type MatchStatus, type Side, type Tournament } from './types'
+import { TEAM_POSITIONS, type AppState, type Competition, type Competitor, type Match, type MatchStatus, type Side, type Tournament } from './types'
 
 /** Who is fighting: name plus dojo (or team) and IOC country code. */
 export interface Person {
@@ -50,7 +51,11 @@ export interface PublicMatchup {
 }
 
 export interface PublicView {
+  /** Competition name. */
   tournamentName: string | null
+  /** Category on this court, e.g. "Veterans individual"; shown when there are several categories. */
+  categoryName: string | null
+  multiCategory: boolean
   /** Court this view belongs to, e.g. "Shiai-jo A". Null without a tournament. */
   courtName: string | null
   /** More than one court: show the court name on screen. */
@@ -116,39 +121,54 @@ export function matchLabel(t: Tournament, m: Match): string {
 }
 
 export function champion(t: Tournament): Person | null {
+  if (t.bracketPlan?.kind === 'none') {
+    const first = t.phase === 'finished' && t.pools[0] ? computeStandings(t, t.pools[0])[0] : undefined
+    return first ? describeEntrant(t, first.entrantId) : null
+  }
   const final = t.bracket ? Object.values(t.bracket.nodes).find((n) => !n.next) : undefined
   return final?.winnerEntrantId ? describeEntrant(t, final.winnerEntrantId) : null
 }
 
-/** What one court's scoreboard shows. Without `courtId`: the first court. */
-export function toPublicView(state: AppState, courtId?: string): PublicView {
-  const t = state.tournament
-  if (!t) return { tournamentName: null, courtName: null, multiCourt: false, match: null, team: null, nextMatch: null, champion: null }
-
-  const court = courtOf(t, t.courts.some((c) => c.id === courtId) ? courtId : undefined)
-  const base = { tournamentName: t.name, courtName: court.name, multiCourt: t.courts.length > 1 }
-  const m = activeMatchOn(t, court.id)
-  const next = nextScheduledOn(t, court.id)
-  const nextMatch = next ? { aka: describeCompetitor(t, next.aka), shiro: describeCompetitor(t, next.shiro) } : null
-  if (!m) return { ...base, match: null, team: null, nextMatch, champion: champion(t) }
-
+function matchView(t: Tournament, m: Match): PublicMatch {
   const score = computeScore(m.events)
   const over = m.status === 'awaiting-confirmation' || m.status === 'completed'
   return {
-    ...base,
-    champion: null,
-    match: {
-      id: m.id,
-      status: m.status,
-      aka: { ...describeCompetitor(t, m.aka), ...score.aka },
-      shiro: { ...describeCompetitor(t, m.shiro), ...score.shiro },
-      encho: m.encho,
-      timeUp: m.endReason === 'time-up',
-      winner: over ? pendingResult(m).winner : null,
-      positionLabel: positionLabel(t, m),
-      label: matchLabel(t, m)
-    },
-    team: teamScore(t, m),
-    nextMatch
+    id: m.id,
+    status: m.status,
+    aka: { ...describeCompetitor(t, m.aka), ...score.aka },
+    shiro: { ...describeCompetitor(t, m.shiro), ...score.shiro },
+    encho: m.encho,
+    timeUp: m.endReason === 'time-up',
+    winner: over ? pendingResult(m).winner : null,
+    positionLabel: positionLabel(t, m),
+    label: matchLabel(t, m)
   }
+}
+
+/** Champion of the last finished category on this court, once nothing else is left there. */
+function lastChampionOn(comp: Competition, courtId: string): { category: Tournament; champion: Person } | null {
+  for (const c of [...comp.categories].reverse()) {
+    const onHere = Object.values(c.matches).some((m) => m.courtId === courtId)
+    const champ = onHere && c.phase === 'finished' ? champion(c) : null
+    if (champ) return { category: c, champion: champ }
+  }
+  return null
+}
+
+/** What one court's scoreboard shows. Without `courtId`: the first court. */
+export function toPublicView(state: AppState, courtId?: string): PublicView {
+  const comp = state.competition
+  if (!comp || !comp.courts.length) {
+    return { tournamentName: null, categoryName: null, multiCategory: false, courtName: null, multiCourt: false, match: null, team: null, nextMatch: null, champion: null }
+  }
+  const slot = comp.courts.find((c) => c.id === courtId) ?? comp.courts[0]!
+  const base = { tournamentName: comp.name, courtName: slot.name, multiCourt: comp.courts.length > 1, multiCategory: comp.categories.length > 1 }
+  const on = onCourt(comp, slot.id)
+  const next = nextOnCourt(comp, slot.id)
+  const nextMatch = next ? { aka: describeCompetitor(next.category, next.match.aka), shiro: describeCompetitor(next.category, next.match.shiro) } : null
+  if (!on?.match) {
+    const done = next ? null : lastChampionOn(comp, slot.id)
+    return { ...base, categoryName: done?.category.name ?? on?.category.name ?? null, match: null, team: null, nextMatch, champion: done?.champion ?? null }
+  }
+  return { ...base, categoryName: on.category.name, champion: null, match: matchView(on.category, on.match), team: teamScore(on.category, on.match), nextMatch }
 }

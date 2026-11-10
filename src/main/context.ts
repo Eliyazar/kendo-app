@@ -1,5 +1,5 @@
 // Everything the main process runs, in one place. A laptop is either the
-// host (owns the tournament, saves it, runs the clocks) or a court laptop
+// host (owns the competition, saves it, runs the clocks) or a court laptop
 // (mirrors the host and operates one court).
 
 import { randomBytes } from 'node:crypto'
@@ -47,7 +47,8 @@ export class AppContext {
   readonly server: LocalServer
   readonly publisher: Publisher
   private notices: Notice[] = []
-  private lastPhase: string | null = null
+  /** Phase of each category at the last change, to notice when one finishes. */
+  private lastPhases = new Map<string, string>()
 
   constructor(
     private readonly file: StateFile,
@@ -128,9 +129,9 @@ export class AppContext {
 
   /** This laptop's court: the configured one if it exists, else the first. */
   courtId(): string | null {
-    const t = this.getState().tournament
+    const comp = this.getState().competition
     const wanted = this.settings.get().courtId
-    return t?.courts.find((c) => c.id === wanted)?.id ?? t?.courts[0]?.id ?? null
+    return comp?.courts.find((c) => c.id === wanted)?.id ?? comp?.courts[0]?.id ?? null
   }
 
   async dispatch(action: AdminAction): Promise<DispatchResult> {
@@ -143,7 +144,7 @@ export class AppContext {
     if (this.isClient) return { ok: false, error: 'This laptop is not the host.' }
     const action = this.parse(input, false)
     if (!action || !ALLOWED_FROM_COURT.has(action.type)) return { ok: false, error: 'Not allowed from a court laptop.' }
-    if (!this.store.getState().tournament?.courts.some((c) => c.id === courtId)) return { ok: false, error: 'Unknown court.' }
+    if (!this.store.getState().competition?.courts.some((c) => c.id === courtId)) return { ok: false, error: 'Unknown court.' }
     return this.store.dispatch(COURT_ACTIONS.has(action.type) ? ({ ...action, courtId } as AdminAction) : action)
   }
 
@@ -154,17 +155,19 @@ export class AppContext {
     this.broadcast()
   }
 
-  /** When the final is approved, results and diplomas are saved automatically. */
+  /** When a category's final is approved, its results and diplomas are saved automatically. */
   private autoExport(): void {
-    const phase = this.store.getState().tournament?.phase ?? null
-    const justFinished = phase === 'finished' && this.lastPhase !== null && this.lastPhase !== 'finished'
-    this.lastPhase = phase
-    if (!justFinished) return
-    void exportResults(this.store.getState(), this.publisher.getStatus().publicUrl).then((r) =>
-      r.ok
-        ? this.notice(`Tournament finished — results and diplomas saved (${r.files} files).`, 'info', r.folder)
-        : this.notice(`Saving results failed: ${r.error}`, 'warn')
-    )
+    const categories = this.store.getState().competition?.categories ?? []
+    for (const c of categories) {
+      const before = this.lastPhases.get(c.id)
+      this.lastPhases.set(c.id, c.phase)
+      if (c.phase !== 'finished' || before === undefined || before === 'finished') continue
+      void exportResults(this.store.getState(), this.publisher.getStatus().publicUrl, c.id).then((r) =>
+        r.ok
+          ? this.notice(`${c.name} finished — results and diplomas saved (${r.files} files).`, 'info', r.folder)
+          : this.notice(`Saving results of ${c.name} failed: ${r.error}`, 'warn')
+      )
+    }
   }
 
   publicView(): PublicView {
@@ -179,7 +182,7 @@ export class AppContext {
       state,
       courtId,
       settings: s,
-      sharing: this.server.info(courtLetter(state.tournament, courtId)),
+      sharing: this.server.info(courtLetter(state.competition, courtId)),
       online: this.isClient ? { state: 'off', lastPublishedAt: null, publicUrl: null } : this.publisher.getStatus(),
       courtLink: {
         joinCode: s.court.joinCode,

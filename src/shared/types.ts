@@ -292,7 +292,12 @@ export interface Tournament {
   teamMatches: Record<Id, TeamMatch>
   bracket: Bracket | null
 
+  /** Every court of the competition, with this category's loaded match on each. */
   courts: Court[]
+  /** Courts this category is fought on (pools and bracket are spread over them). Default: all. */
+  homeCourtIds?: Id[]
+  /** How the elimination is formed when the pools are locked. Default: auto. */
+  bracketPlan?: BracketPlan
   /** Fight order. Match ids (individual bouts, incl. team bouts); each court takes its own in this order. */
   matchQueue: Id[]
 
@@ -304,11 +309,42 @@ export interface Tournament {
 // Persisted application state
 // ---------------------------------------------------------------------------
 
-export const SCHEMA_VERSION = 3
+export const SCHEMA_VERSION = 4
+
+/**
+ * auto  = seeded from the pool qualifiers;
+ * pairs = first-round pairings as given in a draw sheet, e.g. [["A1","B1"],["B2","A2"]];
+ * none  = no elimination: the pool ranking decides the places (single-pool categories).
+ */
+export type BracketPlan = { kind: 'auto' } | { kind: 'pairs'; pairs: [string, string][] } | { kind: 'none' }
+
+/** A court of the competition and the category currently fighting on it. */
+export interface CourtSlot {
+  id: Id
+  name: string
+  categoryId: Id | null
+  /** The operator loaded this match by hand: the court stays on it until it is done. */
+  pinnedMatchId?: Id
+}
+
+/**
+ * The whole event. Each category (Seniors, Veterans, Teams, Children…) is a
+ * Tournament with its own pools, bracket and mode; they share the courts.
+ */
+export interface Competition {
+  id: Id
+  name: string
+  date: string
+  courts: CourtSlot[]
+  /** In the order they are fought; a free court takes the first category that has a match for it. */
+  categories: Tournament[]
+  createdAt: Timestamp
+  updatedAt: Timestamp
+}
 
 export interface AppState {
   schemaVersion: number
-  tournament: Tournament | null
+  competition: Competition | null
   /** Bumped on every state change; lets renderers ignore stale pushes. */
   revision: number
 }

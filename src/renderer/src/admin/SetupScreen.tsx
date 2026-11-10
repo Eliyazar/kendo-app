@@ -2,9 +2,10 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import type { ImportedEntrant } from '@shared/import-parse'
-import type { AdminAction } from '@shared/ipc'
+import type { AdminAction, DrawImportResult } from '@shared/ipc'
 import { poolCount, validateSetup, type TournamentSetup } from '@shared/setup'
 import type { TeamSize, TournamentMode } from '@shared/types'
+import { DrawImportPanel } from './DrawImportPanel'
 
 const DRAFT_KEY = 'kendo-setup-draft'
 
@@ -58,6 +59,7 @@ export function SetupScreen({ send, devMode }: { send: (a: AdminAction) => Promi
   const [draft, setDraft] = useState<Draft>(loadDraft)
   const [importNote, setImportNote] = useState<{ file: string; warnings: string[] } | null>(null)
   const [importError, setImportError] = useState<string | null>(null)
+  const [drawLoaded, setDrawLoaded] = useState<Extract<DrawImportResult, { ok: true }> | null>(null)
   const set = <K extends keyof Draft>(key: K, value: Draft[K]): void => setDraft((d) => ({ ...d, [key]: value }))
 
   useEffect(() => {
@@ -100,6 +102,21 @@ export function SetupScreen({ send, devMode }: { send: (a: AdminAction) => Promi
     setDraft((d) => ({ ...d, entrants: r.entrants, mode: anyTeam ? 'team' : d.mode }))
   }
 
+  const doImportDraw = async (): Promise<void> => {
+    const r = await window.kendoAdmin.importDraw()
+    if (!r) return
+    if (!r.ok) {
+      setImportError(r.error)
+      return
+    }
+    if (!r.categories.length) {
+      setImportError(`No categories found in ${r.files.join(', ')}.${r.warnings.length ? ' ' + r.warnings.join(' ') : ''}`)
+      return
+    }
+    setImportError(null)
+    setDrawLoaded(r)
+  }
+
   const create = async (): Promise<void> => {
     const ok = await send({ type: 'CREATE_TOURNAMENT', setup: { ...draft, entrants: inDraw, drawSeed: Math.floor(Math.random() * 2 ** 31) } })
     if (ok) {
@@ -110,6 +127,8 @@ export function SetupScreen({ send, devMode }: { send: (a: AdminAction) => Promi
       }
     }
   }
+
+  if (drawLoaded) return <DrawImportPanel loaded={drawLoaded} send={send} onCancel={() => setDrawLoaded(null)} />
 
   return (
     <div className="grid min-h-0 flex-1 grid-cols-[360px_1fr] gap-4">
@@ -223,6 +242,13 @@ export function SetupScreen({ send, devMode }: { send: (a: AdminAction) => Promi
           </button>
           <button onClick={doImport} className="rounded-lg bg-amber-500 px-4 py-2 font-bold text-ink hover:bg-amber-400">
             Import CSV / Excel…
+          </button>
+          <button
+            onClick={doImportDraw}
+            className="rounded-lg bg-emerald-600 px-4 py-2 font-bold hover:bg-emerald-500"
+            title="Excel files where the groups and fights are already made — one competition with all categories"
+          >
+            Import draw files (all categories)…
           </button>
         </div>
 

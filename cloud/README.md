@@ -33,7 +33,7 @@ The tournament code (slug) is derived from the tournament id; the public page is
 
 | Route | Auth | Purpose |
 | --- | --- | --- |
-| `POST /api/publish` | `Authorization: Bearer <PUBLISH_KEY>` | Body: `PublishPayload` (max 4 MB, `slug` matches `^[a-z0-9]{6,32}$`, `snapshot.version === 1`). Returns `{ ok: true }`. |
+| `POST /api/publish` | `Authorization: Bearer <PUBLISH_KEY>` | Body: `PublishPayload` (max 4 MB, `slug` matches `^[a-z0-9]{6,32}$`, `snapshot.version === 2`, one competition with several `categories`). Returns `{ ok: true }`. |
 | `GET /api/t/:slug` | none | The public snapshot (never the secret). `ETag` + `If-None-Match` (304), `Cache-Control: no-cache`. 404 `{ error }` if unknown. |
 | `POST /api/t/:slug/team` | team PIN | Body `{ teamId, pin }`. Returns `{ ok, team, players, encounters: [{ teamMatchId, label, courtName, opponentTeamName, side, lineup, submitted, confirmed }] }`; on failure `{ ok: false, error }`. |
 | `POST /api/t/:slug/lineup` | team PIN | Body `{ teamId, pin, teamMatchId, lineup }`. Validates (encounter open for that team, right length, own members only, no duplicates), stores a `LineupSubmission` in the inbox (replaces an older pending one) and updates the team's visible order. Returns `{ ok: true }`. |

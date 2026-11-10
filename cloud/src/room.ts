@@ -2,7 +2,7 @@
 // (PIN hashes + open orders), the inbox of captain submissions and the PIN rate-limit counters.
 import { DurableObject } from 'cloudflare:workers'
 import type { LineupSubmission, PublishPayload, PublishedSecret, PublishedSnapshot, TeamLoginResponse } from './contract'
-import { buildEncounterInfos, openEncountersFor, overlayPending, validateLineup } from './lineup'
+import { buildEncounterInfos, categoryOfTeam, openEncountersFor, overlayPending, validateLineup } from './lineup'
 import { verifyPin } from './pin'
 import { WINDOW_MS, beginAttempt, finishSuccess, globalLimitMessage, retryMessage } from './ratelimit'
 
@@ -119,7 +119,7 @@ export class TournamentRoom extends DurableObject<Env> {
     const snap = await this.loadSnapshot()
     const secret = await this.loadSecret()
     if (!snap || !secret) return { ok: false, status: 404, error: 'Tournament not found' }
-    if (!snap.teams.some((t) => t.id === teamId)) return { ok: false, status: 401, error: 'Wrong team or PIN' }
+    if (!categoryOfTeam(snap, teamId)) return { ok: false, status: 401, error: 'Wrong team or PIN' }
 
     const ipKey = `${RL_PREFIX}${teamId}:${ip}`
     const globalKey = `${RLG_PREFIX}${teamId}`
@@ -156,12 +156,13 @@ export class TournamentRoom extends DurableObject<Env> {
     const auth = await this.authenticate(teamId, pin, ip)
     if (!auth.ok) return auth
     const { snap, secret } = auth
-    const team = snap.teams.find((t) => t.id === teamId)!
+    const cat = categoryOfTeam(snap, teamId)!
+    const team = cat.teams.find((t) => t.id === teamId)!
     const members = new Set(team.members)
     return {
       ok: true,
       team,
-      players: snap.players.filter((p) => members.has(p.id)),
+      players: cat.players.filter((p) => members.has(p.id)),
       encounters: buildEncounterInfos(snap, secret.openLineups, teamId, await this.pending(), await this.confirmedKeys())
     }
   }

@@ -24,6 +24,72 @@ export interface TournamentSetup {
   entrants: ImportedEntrant[]
   /** Seed for the random part of the draw (same seed + same list = same pools). */
   drawSeed: number
+  /** Courts (ids of the competition) this category is fought on; default all. */
+  courtIds?: Id[]
+  /** Pools, fight order and bracket already decided elsewhere (e.g. a draw sheet). */
+  predrawn?: Predrawn
+}
+
+/** A pool exactly as drawn: names refer to entrants (individual) or team names (team mode). */
+export interface PredrawnPool {
+  name: string
+  entrants: string[]
+  /** [aka, shiro] in fight order. */
+  matches: [string, string][]
+}
+
+export interface Predrawn {
+  pools: PredrawnPool[]
+  /** First-round pairings by pool place, e.g. [["A1","B1"],["B2","A2"]]; [] = none. */
+  bracket: [string, string][]
+}
+
+const nameKey = (v: string): string =>
+  v
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase()
+
+/** Pool letter of "Pool A" (or "A"). */
+export const poolLetter = (name: string): string => (name.trim().match(/([A-Z0-9]+)$/i)?.[1] ?? name).toUpperCase()
+
+function validatePredrawn(input: unknown, names: Set<string>): Predrawn | string {
+  if (typeof input !== 'object' || input === null) return 'Invalid pre-drawn pools.'
+  const p = input as Record<string, unknown>
+  if (!Array.isArray(p['pools']) || p['pools'].length === 0 || p['pools'].length > 32) return 'Invalid pre-drawn pools.'
+  const pools: PredrawnPool[] = []
+  for (const raw of p['pools'] as unknown[]) {
+    const pool = (raw ?? {}) as Record<string, unknown>
+    const name = text(pool['name'])
+    const entrants = Array.isArray(pool['entrants']) ? (pool['entrants'] as unknown[]).map(text) : []
+    const matches = Array.isArray(pool['matches']) ? (pool['matches'] as unknown[]) : []
+    if (!name || entrants.length < 1 || entrants.some((e) => !e) || matches.length > 300) return 'Invalid pre-drawn pool.'
+    const unknown = entrants.find((e) => !names.has(nameKey(e!)))
+    if (unknown) return `${name}: "${unknown}" is not in the participant list.`
+    const pairs: [string, string][] = []
+    for (const m of matches) {
+      if (!Array.isArray(m) || m.length !== 2) return `${name}: invalid match.`
+      const a = text(m[0])
+      const b = text(m[1])
+      if (!a || !b || nameKey(a) === nameKey(b)) return `${name}: invalid match.`
+      if (![a, b].every((x) => entrants.some((e) => nameKey(e!) === nameKey(x)))) return `${name}: a match names someone outside the pool.`
+      pairs.push([a, b])
+    }
+    pools.push({ name, entrants: entrants as string[], matches: pairs })
+  }
+  const letters = new Set(pools.map((pl) => poolLetter(pl.name)))
+  const bracket: [string, string][] = []
+  for (const pair of Array.isArray(p['bracket']) ? (p['bracket'] as unknown[]) : []) {
+    if (!Array.isArray(pair) || pair.length !== 2) return 'Invalid bracket pairing.'
+    const refs = pair.map((r) => (typeof r === 'string' ? r.trim().toUpperCase() : ''))
+    if (refs.some((r) => !/^[A-Z0-9]+\d$/.test(r) || !letters.has(r.slice(0, -1)))) {
+      return `Bracket pairing ${refs.join(' – ')} refers to a pool that does not exist.`
+    }
+    bracket.push([refs[0]!, refs[1]!])
+  }
+  return { pools, bracket }
 }
 
 export const SETUP_LIMITS = {
@@ -106,6 +172,9 @@ export function validateSetup(input: unknown): TournamentSetup | string {
     drawSeed
   }
   if (teamSize) setup.teamSize = teamSize
+  if (Array.isArray(s['courtIds']) && s['courtIds'].length <= 8 && s['courtIds'].every((x) => typeof x === 'string')) {
+    setup.courtIds = s['courtIds'] as string[]
+  }
 
   const count = mode === 'team' ? groupTeams(entrants).length : entrants.length
   if (mode === 'team') {
@@ -116,6 +185,19 @@ export function validateSetup(input: unknown): TournamentSetup | string {
     }
   }
   if (count < 2) return mode === 'team' ? 'At least 2 teams are needed.' : 'At least 2 participants are needed.'
+  if (s['predrawn'] !== undefined) {
+    const names = new Set((mode === 'team' ? groupTeams(entrants).map((g) => g.name) : entrants.map((e) => e.name)).map(nameKey))
+    const predrawn = validatePredrawn(s['predrawn'], names)
+    if (typeof predrawn === 'string') return predrawn
+    setup.predrawn = predrawn
+    // Qualifiers per pool = the deepest place the bracket refers to. Without a bracket
+    // the pool ranking gives the medals, so the top 3 must be free of ties.
+    const smallestPool = Math.min(...predrawn.pools.map((p) => p.entrants.length))
+    setup.advancePerPool = predrawn.bracket.length
+      ? Math.max(1, ...predrawn.bracket.flat().map((r) => Number(r.slice(-1))))
+      : Math.max(1, Math.min(predrawn.pools.length === 1 ? 3 : 2, smallestPool - 1))
+    return setup
+  }
   const smallest = Math.floor(count / poolCount(count, setup.poolSize))
   if (setup.advancePerPool >= smallest) {
     return `With pools of ${smallest}, at most ${smallest - 1} can qualify per pool.`
@@ -198,7 +280,11 @@ export function roundRobin<T>(items: readonly T[]): [T, T][][] {
 
 const minutes = (m: number): number => Math.round(m * 60_000)
 
-export function createTournament(setup: TournamentSetup, now: number): Tournament {
+/**
+ * Create a category. `courts` are the competition's courts; without them the
+ * category gets its own (single-category setup).
+ */
+export function createTournament(setup: TournamentSetup, now: number, courts?: { id: Id; name: string }[]): Tournament {
   const poolCfg: MatchConfig = { durationMs: minutes(setup.poolMatchMinutes), ipponsToWin: 2, enchoOnDraw: false }
   const bracketCfg: MatchConfig = { durationMs: minutes(setup.bracketMatchMinutes), ipponsToWin: 2, enchoOnDraw: true }
 
@@ -237,8 +323,31 @@ export function createTournament(setup: TournamentSetup, now: number): Tournamen
     })
   }
 
-  const groups = drawPools(drawEntrants, poolCount(drawEntrants.length, setup.poolSize), setup.drawSeed)
-  const pools: Pool[] = groups.map((entrantIds, i) => ({ id: uid('pool'), name: poolName(i), entrantIds }))
+  // Pre-drawn: pools exactly as given. Otherwise: draw them here.
+  const byName = new Map<string, Id>(
+    setup.mode === 'team'
+      ? Object.values(teams).map((x): [string, Id] => [nameKey(x.name), x.id])
+      : Object.values(players).map((x): [string, Id] => [nameKey(x.name), x.id])
+  )
+  const idOf = (name: string): Id => byName.get(nameKey(name))!
+  const pools: Pool[] = setup.predrawn
+    ? setup.predrawn.pools.map((p) => ({ id: uid('pool'), name: p.name, entrantIds: p.entrants.map(idOf) }))
+    : drawPools(drawEntrants, poolCount(drawEntrants.length, setup.poolSize), setup.drawSeed).map((entrantIds, i) => ({
+        id: uid('pool'),
+        name: poolName(i),
+        entrantIds
+      }))
+  // Entrants left out of every pre-drawn pool are not part of this category.
+  if (setup.predrawn) {
+    const inPools = new Set(pools.flatMap((p) => p.entrantIds))
+    for (const id of Object.keys(setup.mode === 'team' ? teams : players)) {
+      if (inPools.has(id)) continue
+      if (setup.mode === 'team') {
+        teams[id]!.members.forEach((m) => delete players[m])
+        delete teams[id]
+      } else delete players[id]
+    }
+  }
 
   let t: Tournament = {
     id: uid('tour'),
@@ -256,12 +365,34 @@ export function createTournament(setup: TournamentSetup, now: number): Tournamen
     matches: {},
     teamMatches: {},
     bracket: null,
-    courts: makeCourts(setup.courts, () => uid('court')),
+    courts: courts ? courts.map((c) => ({ id: c.id, name: c.name, activeMatchId: null })) : makeCourts(setup.courts, () => uid('court')),
     matchQueue: [],
     createdAt: now,
     updatedAt: now
   }
   if (setup.teamSize) t.teamSize = setup.teamSize
+  if (setup.courtIds?.length) t.homeCourtIds = setup.courtIds
+  t.bracketPlan = !setup.predrawn
+    ? { kind: 'auto' }
+    : setup.predrawn.bracket.length
+      ? { kind: 'pairs', pairs: setup.predrawn.bracket }
+      : pools.length === 1
+        ? { kind: 'none' }
+        : { kind: 'auto' }
+
+  if (setup.predrawn) {
+    // Fight order as written: the n-th match of every pool, pool by pool (row by row in the sheet).
+    const rows = Math.max(0, ...setup.predrawn.pools.map((p) => p.matches.length))
+    for (let r = 0; r < rows; r++) {
+      setup.predrawn.pools.forEach((p, i) => {
+        const m = p.matches[r]
+        if (!m) return
+        const sch = createMeeting(t, 'pool', idOf(m[0]), idOf(m[1]), { poolId: pools[i]!.id, courtId: courtFor(t, i) })
+        t = enqueue(sch.t, sch.boutIds)
+      })
+    }
+    return fillCourts(t)
+  }
 
   // Interleave pools round by round so fighters rest between their matches.
   const schedules = pools.map((p) => roundRobin(p.entrantIds))

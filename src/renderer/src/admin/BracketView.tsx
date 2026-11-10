@@ -1,6 +1,7 @@
 // Elimination bracket, one column per round.
 
 import { tallyEncounter } from '@shared/encounters'
+import { podium } from '@shared/published'
 import { champion, describeEntrant, roundName } from '@shared/public-view'
 import type { BracketNode, Side, Tournament } from '@shared/types'
 
@@ -53,6 +54,20 @@ function NodeCard({ t, node }: { t: Tournament; node: BracketNode }) {
 
 export function BracketView({ t }: { t: Tournament }) {
   const b = t.bracket
+  if (!b && t.bracketPlan?.kind === 'none') {
+    const places = podium(t)
+    return (
+      <div className="flex flex-1 flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-white/15 text-white/60">
+        <p>No elimination in this category: the pool ranking gives 1st, 2nd and 3rd place.</p>
+        {places.map((p) => (
+          <div key={p.entrantId} className="text-lg">
+            <b className="mr-2 text-amber-300">{p.place}.</b>
+            {describeEntrant(t, p.entrantId).name}
+          </div>
+        ))}
+      </div>
+    )
+  }
   if (!b) {
     return (
       <div className="flex flex-1 items-center justify-center rounded-2xl border border-dashed border-white/15 text-white/50">
