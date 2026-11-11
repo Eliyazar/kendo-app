@@ -10,6 +10,7 @@ import { ScaledStage } from '../components/ScaledStage'
 import { Scoreboard } from '../components/Scoreboard'
 import { BracketView } from './BracketView'
 import { EditPersonDialog } from './EditPersonDialog'
+import { TeamOrdersBar } from './TeamOrders'
 import { MatchQueue } from './MatchQueue'
 import { ParticipantsView } from './ParticipantsView'
 import { PoolsView } from './PoolsView'
@@ -318,6 +319,8 @@ export function AdminApp() {
             </div>
 
             {match && needsReps && courtCategory && <RepresentativePicker t={courtCategory} match={match} send={fire} />}
+
+            <TeamOrdersBar comp={comp} courtId={courtId} send={send} />
 
             {match && pm && (
               <div className="flex min-h-0 flex-1 gap-4">

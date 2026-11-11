@@ -174,7 +174,7 @@ function IndividualList({ t, send }: { t: Tournament; send: Send }) {
   )
 }
 
-function OrderSelects({ team, t, value, onChange, disabled }: { team: Team; t: Tournament; value: (Id | null)[]; onChange: (v: (Id | null)[]) => void; disabled?: boolean }) {
+export function OrderSelects({ team, t, value, onChange, disabled }: { team: Team; t: Tournament; value: (Id | null)[]; onChange: (v: (Id | null)[]) => void; disabled?: boolean }) {
   const labels = TEAM_POSITIONS[team.size as TeamSize]
   return (
     <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${team.size}, minmax(0, 1fr))` }}>
@@ -185,7 +185,11 @@ function OrderSelects({ team, t, value, onChange, disabled }: { team: Team; t: T
             disabled={disabled}
             className="w-full rounded-md border border-line bg-surface-2 px-2 py-1.5 text-sm disabled:opacity-50"
             value={id ?? ''}
-            onChange={(e) => onChange(value.map((x, i) => (i === pos ? e.target.value || null : x)))}
+            onChange={(e) => {
+              const picked = e.target.value || null
+              // Picking someone already placed swaps the two positions (a player fights once per encounter).
+              onChange(value.map((x, i) => (i === pos ? picked : picked !== null && x === picked ? value[pos]! : x)))
+            }}
           >
             <option value="">— empty —</option>
             {team.members.map((m) => (

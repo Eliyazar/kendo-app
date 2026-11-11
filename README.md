@@ -63,6 +63,7 @@ When the groups are made by someone else in Excel, use **Setup → Import draw f
 - **Edit** names, dojos, countries and grades at any time.
 - **Withdraw** someone: if nobody in their pool has fought yet, they simply leave the pool. Otherwise their remaining matches are lost by **kiken** (the opponent wins 2–0). In the bracket, the opponent advances.
 - **During a match** (shiai-jo screen): click the big clock to set any time (e.g. `1:23`), or click **Regulation** to change this match's length; the clock must be paused. The ✎ next to a fighter's name fixes the name, country and club on the spot.
+- **Team orders on paper**: the **Team orders** strip on the shiai-jo screen lists the next encounters on this court (with how many orders are set). Click one and pick each position as written on the captain's paper; picking a player who is already placed swaps the two.
 - **Remove from group** (pool phase only): deletes the person or team from their pool together with all their pool matches, played ones too, as if they had never been drawn. Use **Withdraw** instead when results against them should stand.
 - **Late entry** (pool phase): joins the smallest pool and gets a match against every member.
 - **Edit result** (✎ in the match order) corrects an approved match. Pool results can change until the pools are locked. A bracket result can change who advances only while the next round has not started.
