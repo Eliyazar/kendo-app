@@ -63,7 +63,8 @@ export function parseAdminAction(input: unknown, allowDev: boolean): AdminAction
   if (type === 'ADD_IPPON' && !(SIDES.includes(a['side'] as string) && TECHNIQUES.includes(a['technique'] as string))) return null
   if ((type === 'ADD_HANSOKU' || type === 'FUSEN_GACHI' || type === 'SET_REPRESENTATIVE') && !SIDES.includes(a['side'] as string)) return null
   if (type === 'SET_REPRESENTATIVE' && !str(a['playerId'])) return null
-  if (type === 'TIMER_ADJUST' && !(Number.isFinite(a['deltaMs']) && Math.abs(a['deltaMs'] as number) <= 60_000)) return null
+  if (type === 'TIMER_ADJUST' && !(Number.isFinite(a['deltaMs']) && Math.abs(a['deltaMs'] as number) <= 30 * 60_000)) return null
+  if (type === 'TIMER_SET_DURATION' && !(Number.isFinite(a['durationMs']) && (a['durationMs'] as number) > 0 && (a['durationMs'] as number) <= 30 * 60_000)) return null
   if ((STRING_FIELDS[type] ?? []).some((f) => !str(a[f]))) return null
   if ((OBJECT_FIELDS[type] ?? []).some((f) => !obj(a[f]))) return null
   if ((ARRAY_FIELDS[type] ?? []).some(([f, max]) => !Array.isArray(a[f]) || (a[f] as unknown[]).length > max)) return null

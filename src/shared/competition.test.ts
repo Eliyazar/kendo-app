@@ -248,3 +248,14 @@ describe('removing someone from a group', () => {
     expect(Object.values(cat(s, 0).players)).toHaveLength(6)
   })
 })
+
+describe('team country from the team name', () => {
+  it('reads countries, ignores clubs', async () => {
+    const { countryFromTeamName } = await import('./draw-setup')
+    expect(countryFromTeamName('Serbia 1')).toBe('SRB')
+    expect(countryFromTeamName('Romania mix')).toBe('ROU')
+    expect(countryFromTeamName('North Macedonia')).toBe('MKD')
+    expect(countryFromTeamName('CRK 2')).toBeUndefined()
+    expect(countryFromTeamName('Meiyo')).toBeUndefined()
+  })
+})

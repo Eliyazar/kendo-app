@@ -4,12 +4,12 @@
 
 import { useEffect, useState } from 'react'
 import type { Person, PublicCompetitor, PublicMatch, PublicView } from '@shared/public-view'
+import { countryName } from '@shared/countries'
+import { FitText } from './FitText'
 import { CountryChip, HansokuIcon, MarkBadge, MarkSlot } from './Marks'
 
 const TIME_UP_FLASH_MS = 4000
 
-/** Shrink long names so they always fit on one line of a 960px half. */
-const nameSize = (name: string): number => Math.min(150, Math.floor(860 / (Math.max(name.length, 1) * 0.47)))
 
 function Half({ side, c }: { side: 'aka' | 'shiro'; c: PublicCompetitor }) {
   const aka = side === 'aka'
@@ -18,11 +18,10 @@ function Half({ side, c }: { side: 'aka' | 'shiro'; c: PublicCompetitor }) {
     <div className="relative flex flex-col px-16 pt-0 pb-12">
       <div className={`h-[14px] ${aka ? 'bg-aka' : 'bg-shiro'}`} />
       <div className={`mt-10 text-[34px] font-bold tracking-[0.4em] uppercase ${aka ? 'text-aka' : 'text-shiro'}`}>{aka ? 'Aka' : 'Shiro'}</div>
-      <div className="display mt-2 w-full truncate leading-[0.95] font-bold text-white" style={{ fontSize: nameSize(c.name) }}>
-        {c.name}
-      </div>
-      <div className="mt-4 flex items-center gap-5 text-[44px] text-muted">
+      <FitText text={c.name} max={150} min={78} className="display mt-2 leading-[0.95] font-bold text-white" />
+      <div className="mt-4 flex min-w-0 items-center gap-5 text-[44px] text-muted">
         <CountryChip code={c.country} size={34} />
+        {c.country && <span className="shrink-0 font-semibold text-white/85">{countryName(c.country) ?? c.country}</span>}
         <span className="truncate">{c.dojo}</span>
       </div>
 

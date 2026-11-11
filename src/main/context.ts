@@ -21,6 +21,7 @@ const COURT_ACTIONS: ReadonlySet<AdminAction['type']> = new Set([
   'TIMER_PAUSE',
   'TIMER_RESET',
   'TIMER_ADJUST',
+  'TIMER_SET_DURATION',
   'ADD_IPPON',
   'ADD_HANSOKU',
   'FUSEN_GACHI',
@@ -32,7 +33,7 @@ const COURT_ACTIONS: ReadonlySet<AdminAction['type']> = new Set([
 ])
 
 /** What a court laptop may do on the host. */
-const ALLOWED_FROM_COURT: ReadonlySet<AdminAction['type']> = new Set([...COURT_ACTIONS, 'SET_LINEUP', 'EDIT_RESULT'])
+const ALLOWED_FROM_COURT: ReadonlySet<AdminAction['type']> = new Set([...COURT_ACTIONS, 'SET_LINEUP', 'EDIT_RESULT', 'EDIT_PLAYER'])
 
 const MAX_NOTICES = 8
 

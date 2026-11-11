@@ -21,9 +21,11 @@ interface Props {
   /** Fusen-gachi is still possible (match not started). */
   canFusen: boolean
   send: (a: AdminAction) => void
+  /** Opens the name / country editor (only when a player is on this side). */
+  onEdit?: (() => void) | undefined
 }
 
-export function ScoringPanel({ side, competitor: c, scoring, canFusen, send }: Props) {
+export function ScoringPanel({ side, competitor: c, scoring, canFusen, send, onEdit }: Props) {
   const aka = side === 'aka'
   const [fusenArmed, confirmFusen] = useConfirm()
 
@@ -36,9 +38,20 @@ export function ScoringPanel({ side, competitor: c, scoring, canFusen, send }: P
       <div className={`flex items-center gap-4 px-5 py-3 ${aka ? 'bg-aka text-white' : 'bg-shiro text-ink'}`}>
         <span className="text-sm font-black tracking-[0.25em] uppercase">{aka ? 'Aka' : 'Shiro'}</span>
         <div className="min-w-0 flex-1">
-          <div className="truncate text-2xl leading-tight font-black">{c.name}</div>
-          <div className="truncate text-sm font-semibold opacity-70">{c.dojo}</div>
+          <div className="truncate text-2xl leading-tight font-black" title={c.name}>
+            {c.name}
+          </div>
+          <div className="truncate text-sm font-semibold opacity-70">{[c.country, c.dojo].filter(Boolean).join(' · ')}</div>
         </div>
+        {onEdit && (
+          <button
+            onClick={onEdit}
+            title="Edit name, country and club"
+            className={`shrink-0 rounded-lg px-2.5 py-1.5 text-lg ${aka ? 'hover:bg-white/15' : 'hover:bg-black/10'}`}
+          >
+            ✎
+          </button>
+        )}
         <div className="flex items-center gap-2">
           {c.marks.map((m, i) => (
             <MarkBadge key={i} mark={m} size={44} variant="outline" tone={aka ? 'light' : 'dark'} />

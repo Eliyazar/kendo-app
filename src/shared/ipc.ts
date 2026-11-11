@@ -53,6 +53,7 @@ export type AdminAction =
   | ({ type: 'TIMER_PAUSE' } & OnCourt)
   | ({ type: 'TIMER_RESET' } & OnCourt)
   | ({ type: 'TIMER_ADJUST'; deltaMs: number } & OnCourt)
+  | ({ type: 'TIMER_SET_DURATION'; durationMs: number } & OnCourt)
   | ({ type: 'ADD_IPPON'; side: Side; technique: Technique } & OnCourt)
   | ({ type: 'ADD_HANSOKU'; side: Side } & OnCourt)
   | ({ type: 'FUSEN_GACHI'; side: Side } & OnCourt)
@@ -86,6 +87,7 @@ export const ADMIN_ACTION_TYPES: readonly AdminActionType[] = [
   'TIMER_PAUSE',
   'TIMER_RESET',
   'TIMER_ADJUST',
+  'TIMER_SET_DURATION',
   'ADD_IPPON',
   'ADD_HANSOKU',
   'FUSEN_GACHI',

@@ -9,6 +9,7 @@ import type { Competition, Match, Side, Tournament } from '@shared/types'
 import { ScaledStage } from '../components/ScaledStage'
 import { Scoreboard } from '../components/Scoreboard'
 import { BracketView } from './BracketView'
+import { EditPersonDialog } from './EditPersonDialog'
 import { MatchQueue } from './MatchQueue'
 import { ParticipantsView } from './ParticipantsView'
 import { PoolsView } from './PoolsView'
@@ -197,6 +198,7 @@ export function AdminApp() {
   const courtCategory = on?.category ?? null
   const match = on?.match
   const [picked, setPicked] = useState<string | null>(null)
+  const [editPerson, setEditPerson] = useState<string | null>(null)
   const t = comp?.categories.find((c) => c.id === picked) ?? courtCategory ?? comp?.categories[0] ?? null
   const pm = snap?.publicView.match ?? null
   const client = snap?.settings.court.role === 'client'
@@ -319,8 +321,8 @@ export function AdminApp() {
 
             {match && pm && (
               <div className="flex min-h-0 flex-1 gap-4">
-                <ScoringPanel side="aka" competitor={pm.aka} scoring={scoring} canFusen={canFusen} send={fire} />
-                <ScoringPanel side="shiro" competitor={pm.shiro} scoring={scoring} canFusen={canFusen} send={fire} />
+                <ScoringPanel side="aka" competitor={pm.aka} scoring={scoring} canFusen={canFusen} send={fire} onEdit={match?.aka.playerId ? () => setEditPerson(match.aka.playerId) : undefined} />
+                <ScoringPanel side="shiro" competitor={pm.shiro} scoring={scoring} canFusen={canFusen} send={fire} onEdit={match?.shiro.playerId ? () => setEditPerson(match.shiro.playerId) : undefined} />
               </div>
             )}
           </div>
@@ -329,6 +331,9 @@ export function AdminApp() {
       )}
 
       {match && pm && match.status === 'awaiting-confirmation' && <ResultModal match={match} view={pm} send={fire} />}
+      {editPerson && courtCategory?.players[editPerson] && (
+        <EditPersonDialog player={courtCategory.players[editPerson]!} send={send} onClose={() => setEditPerson(null)} />
+      )}
       {snap && <Notices notices={snap.notices} />}
     </div>
   )

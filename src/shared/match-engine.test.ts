@@ -51,6 +51,30 @@ describe('timer', () => {
     expect(m.endReason).toBeUndefined()
     expect(timerDisplayMs(m.timer, 0)).toBe(1000)
   })
+
+  it('sets the clock to any time with one adjust, and undo restores it', () => {
+    const { m } = run(newMatch('x', 'pool', 'a', 'b', POOL), [
+      [{ type: 'TIMER_START' }, 0],
+      [{ type: 'TIMER_PAUSE' }, 40_000],
+      [{ type: 'TIMER_ADJUST', deltaMs: 83_000 - 140_000 }, 40_000]
+    ])
+    expect(timerDisplayMs(m.timer, 0)).toBe(83_000)
+    expect(timerDisplayMs(reduceMatch(m, { type: 'UNDO' }, 41_000).timer, 0)).toBe(140_000)
+  })
+
+  it('changing the match length keeps the time already fought', () => {
+    const { m } = run(newMatch('x', 'pool', 'a', 'b', POOL), [
+      [{ type: 'TIMER_START' }, 0],
+      [{ type: 'TIMER_PAUSE' }, 60_000],
+      [{ type: 'TIMER_SET_DURATION', durationMs: 240_000 }, 60_000]
+    ])
+    expect(m.timer.durationMs).toBe(240_000)
+    expect(timerDisplayMs(m.timer, 0)).toBe(180_000)
+    // Shorter than what was fought: time is up.
+    const short = reduceMatch(m, { type: 'TIMER_SET_DURATION', durationMs: 30_000 }, 61_000)
+    expect(short.status).toBe('awaiting-confirmation')
+    expect(() => reduceMatch(m, { type: 'TIMER_SET_DURATION', durationMs: 0 }, 61_000)).toThrow(RuleError)
+  })
 })
 
 describe('scoring rules', () => {

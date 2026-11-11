@@ -6,6 +6,8 @@ import { useEffect, useState } from 'react'
 import type { PublicCompetitor, PublicView } from '@shared/public-view'
 import { CountryChip, HansokuIcon, MarkBadge, MarkSlot } from '../components/Marks'
 import { ScaledStage } from '../components/ScaledStage'
+import { countryName } from '@shared/countries'
+import { FitText } from '../components/FitText'
 
 function useLiveView(): PublicView | null {
   const [view, setView] = useState<PublicView | null>(null)
@@ -34,9 +36,10 @@ function Side({ side, c }: { side: 'aka' | 'shiro'; c: PublicCompetitor }) {
     <div className={`flex min-w-0 flex-1 items-center gap-6 ${aka ? 'pr-6' : 'flex-row-reverse pl-6'}`}>
       <div className={`h-full w-[12px] shrink-0 ${aka ? 'rounded-l-[18px] bg-aka' : 'rounded-r-[18px] bg-shiro'}`} />
       <div className={`min-w-0 flex-1 ${aka ? '' : 'text-right'}`}>
-        <div className="display truncate text-[56px] leading-none font-bold text-white">{c.name}</div>
+        <FitText text={c.name} max={56} min={34} className="display leading-none font-bold text-white" />
         <div className={`mt-2 flex items-center gap-3 text-[24px] text-muted ${aka ? '' : 'flex-row-reverse'}`}>
           <CountryChip code={c.country} size={20} />
+          {c.country && <span className="shrink-0 font-semibold text-white/85">{countryName(c.country) ?? c.country}</span>}
           <span className="truncate">{c.dojo}</span>
         </div>
       </div>

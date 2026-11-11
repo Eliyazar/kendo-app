@@ -261,6 +261,7 @@ const COURT_ACTIONS: ReadonlySet<AppAction['type']> = new Set([
   'TIMER_PAUSE',
   'TIMER_RESET',
   'TIMER_ADJUST',
+  'TIMER_SET_DURATION',
   'ADD_IPPON',
   'ADD_HANSOKU',
   'FUSEN_GACHI',

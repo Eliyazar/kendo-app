@@ -210,6 +210,8 @@ export type MatchAction =
   | { type: 'TIMER_PAUSE' }
   | { type: 'TIMER_RESET' }
   | { type: 'TIMER_ADJUST'; deltaMs: number }
+  /** Change the regulation time of this match (countdown only); time already fought is kept. */
+  | { type: 'TIMER_SET_DURATION'; durationMs: number }
   | { type: 'ADD_IPPON'; side: Side; technique: Technique }
   | { type: 'ADD_HANSOKU'; side: Side }
   | { type: 'FUSEN_GACHI'; side: Side }
@@ -275,6 +277,16 @@ export function reduceMatch(m: Match, action: MatchAction, now: number): Match {
       if (applied === 0) return m
       const withEvent = pushEvent({ ...m, timer }, now, { kind: 'time-adjust', deltaMs: applied })
       return settle({ ...withEvent, status: m.status === 'scheduled' ? 'scheduled' : withEvent.status }, now)
+    }
+
+    case 'TIMER_SET_DURATION': {
+      if (m.status === 'completed') throw new RuleError('Match is completed.')
+      if (m.timer.mode !== 'countdown') throw new RuleError('Encho has no time limit.')
+      const durationMs = Math.round(action.durationMs / 1000) * 1000
+      if (!(durationMs >= 1000 && durationMs <= 30 * 60_000)) throw new RuleError('Match time must be between 0:01 and 30:00.')
+      const elapsed = timerElapsed(m.timer, now)
+      const timer = { ...m.timer, durationMs, elapsedMs: Math.min(elapsed, durationMs), runningSince: m.timer.runningSince === null ? null : now }
+      return settle({ ...m, timer }, now)
     }
 
     case 'ADD_IPPON':

@@ -1,5 +1,6 @@
 // Turn detected draw sheets into a competition setup the operator can review.
 
+import { toIocCode } from './countries'
 import type { DrawCategory, DrawImport } from './draw-import'
 import type { ImportedEntrant } from './import-parse'
 import type { CompetitionSetup } from './ipc'
@@ -17,6 +18,12 @@ export type CategoryDraft = Omit<TournamentSetup, 'date' | 'courts'> & {
 
 const isChildren = (name: string): boolean => /child|kids|under\s*1[0-4]|u1[0-4]|деца/i.test(name)
 
+/** "Serbia 1", "Romania mix", "North Macedonia" -> IOC code; club names give nothing. */
+export function countryFromTeamName(name: string): string | undefined {
+  const base = name.replace(/\b(mix|mixed|team|national)\b/gi, '').replace(/[\s\d-]+$/, '').trim()
+  return (base && toIocCode(base)) || undefined
+}
+
 function entrantsOf(c: DrawCategory): ImportedEntrant[] {
   if (c.mode === 'individual') {
     return c.entrants.map((e) => (e.country ? { name: e.name, dojo: '', country: e.country } : { name: e.name, dojo: '' }))
@@ -24,7 +31,7 @@ function entrantsOf(c: DrawCategory): ImportedEntrant[] {
   return c.entrants.flatMap((team) =>
     (team.members ?? []).map((m) => {
       const e: ImportedEntrant = { name: m.name, dojo: team.name, team: team.name }
-      const country = m.country ?? team.country
+      const country = m.country ?? team.country ?? countryFromTeamName(team.name)
       if (country) e.country = country
       return e
     })
