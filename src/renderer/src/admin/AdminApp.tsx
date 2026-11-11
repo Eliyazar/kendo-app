@@ -3,13 +3,14 @@
 import { useEffect, useState } from 'react'
 import type { AdminAction, AdminSnapshot, Notice } from '@shared/ipc'
 import { champion } from '@shared/public-view'
-import { onCourt } from '@shared/competition'
+import { onCourt, waitingOn } from '@shared/competition'
 import { poolMatchesComplete } from '@shared/standings'
 import type { Competition, Match, Side, Tournament } from '@shared/types'
 import { ScaledStage } from '../components/ScaledStage'
 import { Scoreboard } from '../components/Scoreboard'
 import { BracketView } from './BracketView'
 import { EditPersonDialog } from './EditPersonDialog'
+import { canPostpone, canSwap, helpOptions } from '@shared/court-tools'
 import { TeamOrdersBar } from './TeamOrders'
 import { MatchQueue } from './MatchQueue'
 import { ParticipantsView } from './ParticipantsView'
@@ -91,12 +92,32 @@ function RepresentativePicker({ t, match, send }: { t: Tournament; match: Match;
 }
 
 /** Free court: categories waiting for Pool Review, champions, or what the other courts do. */
-function IdleBoard({ comp, courtId, onReview }: { comp: Competition; courtId: string | null; onReview: (categoryId: string) => void }) {
+function IdleBoard({ comp, courtId, onReview, send }: { comp: Competition; courtId: string | null; onReview: (categoryId: string) => void; send: (a: AdminAction) => void }) {
   const waiting = comp.categories.filter((c) => c.phase === 'pools' && poolMatchesComplete(c))
+  const blocked = courtId ? waitingOn(comp, courtId) : null
+  const help = courtId && !blocked ? helpOptions(comp, courtId) : []
   const finished = comp.categories.filter((c) => c.phase === 'finished' && champion(c))
   const busyElsewhere = comp.courts.filter((c) => c.id !== courtId && onCourt(comp, c.id)?.match).length
   return (
     <section className="flex flex-1 flex-col items-center justify-center gap-3 overflow-y-auto rounded-2xl border border-line bg-surface p-6 text-center">
+      {blocked && (
+        <div className="w-full max-w-md rounded-xl bg-amber-500/15 px-4 py-3 text-amber-200">
+          Waiting: <b>{blocked.name}</b> is fighting on {blocked.courtName}. The next match starts when that one is over.
+        </div>
+      )}
+      {help.map((h) => (
+        <div key={h.poolId} className="flex w-full max-w-md items-center gap-3 rounded-xl bg-surface-2 px-4 py-3 text-left">
+          <span className="flex-1">
+            <b>Help {h.fromCourt}</b>
+            <span className="block text-sm text-muted">
+              Take over {h.categoryName} · {h.poolName} ({h.matchesLeft} {h.matchesLeft === 1 ? 'match' : 'matches'}). The whole group moves here.
+            </span>
+          </span>
+          <button onClick={() => send({ type: 'TAKE_POOL', poolId: h.poolId })} className="rounded-lg bg-emerald-600 px-4 py-2 font-bold hover:bg-emerald-500">
+            Take over
+          </button>
+        </div>
+      ))}
       {waiting.map((c) => (
         <div key={c.id} className="flex w-full max-w-md items-center gap-3 rounded-xl bg-surface-2 px-4 py-3 text-left">
           <span className="flex-1">
@@ -113,6 +134,9 @@ function IdleBoard({ comp, courtId, onReview }: { comp: Competition; courtId: st
           <div key={c.id}>
             <div className="text-xs font-bold tracking-widest text-hansoku uppercase">🏆 {c.name}</div>
             <div className="display text-2xl font-bold">{champion(c)!.name}</div>
+            <button onClick={() => send({ type: 'SHOW_PODIUM', categoryId: c.id })} className="mt-1 rounded-lg bg-surface-2 px-3 py-1 text-sm font-semibold hover:bg-neutral-700">
+              🏆 Podium on TV
+            </button>
           </div>
         ))}
       {!waiting.length && !finished.length && (
@@ -202,6 +226,7 @@ export function AdminApp() {
   const [editPerson, setEditPerson] = useState<string | null>(null)
   const t = comp?.categories.find((c) => c.id === picked) ?? courtCategory ?? comp?.categories[0] ?? null
   const pm = snap?.publicView.match ?? null
+  const podiumOn = comp?.categories.find((c) => c.id === comp.courts.find((x) => x.id === courtId)?.podiumCategoryId)
   const client = snap?.settings.court.role === 'client'
   useShortcuts(match, tab === 'match', fire)
 
@@ -215,6 +240,7 @@ export function AdminApp() {
   const repsMissing = Boolean(match?.representative && (!match.aka.playerId || !match.shiro.playerId))
   const scoring = Boolean(match && isScoring(match) && !repsMissing)
   const canFusen = Boolean(match && notStarted(match) && !repsMissing)
+  const canKiken = Boolean(match && !notStarted(match) && match.status !== 'completed')
   const tabs: Tab[] = comp ? ['match', 'pools', 'bracket', 'participants', 'settings'] : ['match', 'settings']
   const courtName = comp && comp.courts.length > 1 ? comp.courts.find((c) => c.id === courtId)?.name : null
 
@@ -289,7 +315,7 @@ export function AdminApp() {
       ) : tab === 'pools' || tab === 'bracket' || tab === 'participants' ? (
         <div className="flex min-h-0 flex-1 flex-col gap-3">
           <CategoryPicker comp={comp} value={t.id} onChange={setPicked} />
-          {tab === 'pools' ? <PoolsView t={t} send={fire} /> : tab === 'bracket' ? <BracketView t={t} /> : <ParticipantsView t={t} send={send} />}
+          {tab === 'pools' ? <PoolsView t={t} send={fire} /> : tab === 'bracket' ? <BracketView t={t} send={fire} podiumShown={comp.courts.find((c) => c.id === courtId)?.podiumCategoryId === t.id} /> : <ParticipantsView t={t} send={send} />}
         </div>
       ) : (
         <div className="flex min-h-0 flex-1 gap-4">
@@ -305,11 +331,12 @@ export function AdminApp() {
                 </ScaledStage>
               </section>
               {match ? (
-                <TimerPanel match={match} now={now} send={fire} />
+                <TimerPanel match={match} now={now} send={fire} canLater={Boolean(courtCategory && canPostpone(courtCategory, match))} canSwap={Boolean(courtCategory && canSwap(courtCategory, match))} />
               ) : (
                 <IdleBoard
                   comp={comp}
                   courtId={courtId}
+                  send={fire}
                   onReview={(id) => {
                     setPicked(id)
                     setTab('pools')
@@ -320,12 +347,21 @@ export function AdminApp() {
 
             {match && needsReps && courtCategory && <RepresentativePicker t={courtCategory} match={match} send={fire} />}
 
+            {podiumOn && (
+              <div className="flex items-center gap-3 rounded-2xl border border-amber-500/50 bg-amber-500/10 px-4 py-2 text-amber-200">
+                <span className="flex-1">🏆 The TV shows the podium of <b>{podiumOn.name}</b> instead of the match.</span>
+                <button onClick={() => fire({ type: 'SHOW_PODIUM', categoryId: null })} className="rounded-lg bg-amber-500 px-4 py-1.5 font-bold text-ink hover:bg-amber-400">
+                  Back to the match
+                </button>
+              </div>
+            )}
+
             <TeamOrdersBar comp={comp} courtId={courtId} send={send} />
 
             {match && pm && (
               <div className="flex min-h-0 flex-1 gap-4">
-                <ScoringPanel side="aka" competitor={pm.aka} scoring={scoring} canFusen={canFusen} send={fire} onEdit={match?.aka.playerId ? () => setEditPerson(match.aka.playerId) : undefined} />
-                <ScoringPanel side="shiro" competitor={pm.shiro} scoring={scoring} canFusen={canFusen} send={fire} onEdit={match?.shiro.playerId ? () => setEditPerson(match.shiro.playerId) : undefined} />
+                <ScoringPanel side="aka" competitor={pm.aka} scoring={scoring} canFusen={canFusen} canKiken={canKiken} send={fire} onEdit={match?.aka.playerId ? () => setEditPerson(match.aka.playerId) : undefined} />
+                <ScoringPanel side="shiro" competitor={pm.shiro} scoring={scoring} canFusen={canFusen} canKiken={canKiken} send={fire} onEdit={match?.shiro.playerId ? () => setEditPerson(match.shiro.playerId) : undefined} />
               </div>
             )}
           </div>

@@ -50,11 +50,18 @@ export interface PublicMatchup {
   shiro: Person
 }
 
+export interface PodiumView {
+  categoryName: string
+  places: (Person & { place: 1 | 2 | 3 })[]
+}
+
 export interface PublicView {
   /** Competition name. */
   tournamentName: string | null
   /** Online results page for this competition (set by the app, not by toPublicView); shown as a QR code on the TV. */
   onlineUrl?: string | null
+  /** Award ceremony: the podium shown instead of the match (set by the app). */
+  podium?: PodiumView | null
   /** Category on this court, e.g. "Veterans individual"; shown when there are several categories. */
   categoryName: string | null
   multiCategory: boolean

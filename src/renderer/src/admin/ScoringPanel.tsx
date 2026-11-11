@@ -20,14 +20,17 @@ interface Props {
   scoring: boolean
   /** Fusen-gachi is still possible (match not started). */
   canFusen: boolean
+  /** The match is under way: this fighter may retire by kiken. */
+  canKiken?: boolean
   send: (a: AdminAction) => void
   /** Opens the name / country editor (only when a player is on this side). */
   onEdit?: (() => void) | undefined
 }
 
-export function ScoringPanel({ side, competitor: c, scoring, canFusen, send, onEdit }: Props) {
+export function ScoringPanel({ side, competitor: c, scoring, canFusen, canKiken = false, send, onEdit }: Props) {
   const aka = side === 'aka'
   const [fusenArmed, confirmFusen] = useConfirm()
+  const [kikenArmed, confirmKiken] = useConfirm()
 
   return (
     <section
@@ -85,6 +88,15 @@ export function ScoringPanel({ side, competitor: c, scoring, canFusen, send, onE
           <HansokuIcon size={34} />H · Hansoku
           <span className="tabular rounded-md bg-ink/15 px-2">{c.hansoku}</span>
         </button>
+        {!canFusen && canKiken ? (
+          <button
+            onClick={() => confirmKiken(() => send({ type: 'KIKEN', side }))}
+            className={`h-16 rounded-xl text-base font-bold transition ${kikenArmed ? 'bg-red-600 hover:bg-red-500' : 'bg-neutral-700 hover:bg-neutral-600'}`}
+            title={`${aka ? 'Aka' : 'Shiro'} cannot continue (injury): the opponent wins by kiken`}
+          >
+            {kikenArmed ? 'Confirm kiken?' : 'Kiken'}
+          </button>
+        ) : (
         <button
           disabled={!canFusen}
           onClick={() => confirmFusen(() => send({ type: 'FUSEN_GACHI', side }))}
@@ -95,6 +107,7 @@ export function ScoringPanel({ side, competitor: c, scoring, canFusen, send, onE
         >
           {fusenArmed ? 'Confirm fusen-gachi?' : 'Fusen-gachi'}
         </button>
+        )}
       </div>
     </section>
   )

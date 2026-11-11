@@ -5,7 +5,8 @@
 //   pools -> bracket). A category is a Tournament.
 
 import { buildBracket } from './bracket'
-import { arrangeCourts, categoryById, categoryOwning, onCourt, withCategory } from './competition'
+import { arrangeCourts, categoryById, categoryOwning, fightingElsewhere, onCourt, withCategory } from './competition'
+import { kikenOnCourt, postpone, swapSides, takePool } from './court-tools'
 import { activeMatchOn, courtOf, makeCourts, withCourt } from './courts'
 import { createDemoSetup } from './demo'
 import {
@@ -104,6 +105,21 @@ export function reduceCategory(t: Tournament, action: CategoryAction, now: numbe
       const freed = { ...moved, courts: moved.courts.map((c) => (c.id !== court.id && c.activeMatchId === target.id ? { ...c, activeMatchId: null } : c)) }
       return withCourt(freed, { ...courtOf(freed, court.id), activeMatchId: target.id })
     }
+
+    case 'SHOW_PODIUM':
+      return t // competition level
+
+        case 'POSTPONE_MATCH':
+      return postpone(t, requireActive(t, action.courtId))
+
+    case 'KIKEN':
+      return kikenOnCourt(t, requireActive(t, action.courtId), action.side, now)
+
+    case 'SWAP_SIDES':
+      return swapSides(t, requireActive(t, action.courtId))
+
+    case 'TAKE_POOL':
+      return takePool(t, action.poolId, action.courtId ?? t.courts[0]!.id)
 
     case 'SET_REPRESENTATIVE': {
       const m = requireActive(t, action.courtId)
@@ -268,7 +284,10 @@ const COURT_ACTIONS: ReadonlySet<AppAction['type']> = new Set([
   'UNDO',
   'START_ENCHO',
   'APPROVE_MATCH',
-  'SET_REPRESENTATIVE'
+  'SET_REPRESENTATIVE',
+  'POSTPONE_MATCH',
+  'KIKEN',
+  'SWAP_SIDES'
 ])
 
 export function reduceApp(state: AppState, action: AppAction, now: number): AppUpdate {
@@ -311,6 +330,24 @@ export function reduceApp(state: AppState, action: AppAction, now: number): AppU
       return changed ? commit({ ...comp, categories }) : { state, changed: false }
     }
 
+    case 'SHOW_PODIUM': {
+      if (!comp) throw new RuleError('No competition loaded.')
+      const courtId = action.courtId ?? comp.courts[0]!.id
+      if (action.categoryId) {
+        const c = categoryById(comp, action.categoryId)
+        if (!c) throw new RuleError('Unknown category.')
+        if (c.phase !== 'finished') throw new RuleError(`${c.name} is not finished yet.`)
+      }
+      return commit({
+        ...comp,
+        courts: comp.courts.map((s) => {
+          if (s.id !== courtId) return s
+          const { podiumCategoryId: _p, ...rest } = s
+          return action.categoryId ? { ...rest, podiumCategoryId: action.categoryId } : rest
+        })
+      })
+    }
+
     case 'LOAD_MATCH': {
       if (!comp) throw new RuleError('No competition loaded.')
       const category = categoryOwning(comp, action.matchId)
@@ -323,6 +360,9 @@ export function reduceApp(state: AppState, action: AppAction, now: number): AppU
       if (comp.categories.some((c) => c.courts.some((x) => x.id !== courtId && x.activeMatchId === action.matchId) && c.id !== category.id)) {
         throw new RuleError('That match is on another court.')
       }
+      const target = category.matches[action.matchId]
+      const busyOn = target ? fightingElsewhere(comp, courtId, category, target) : null
+      if (busyOn) throw new RuleError(`A fighter of that match is fighting on ${busyOn} right now.`)
       const next = withCategory(comp, reduceCategory(category, { ...action, courtId }, now))
       return commit({ ...next, courts: next.courts.map((s) => (s.id === courtId ? { ...s, categoryId: category.id, pinnedMatchId: action.matchId } : s)) })
     }

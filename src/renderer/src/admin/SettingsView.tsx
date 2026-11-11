@@ -3,6 +3,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import type { AdminSnapshot, AppSettings } from '@shared/ipc'
 import { Qr } from '../components/Qr'
+import { useConfirm } from './useAdmin'
 
 type Save = (patch: unknown) => Promise<boolean>
 
@@ -63,6 +64,10 @@ export function SettingsView({ snap, save }: { snap: AdminSnapshot; save: Save }
   const [exporting, setExporting] = useState(false)
   const [exportMsg, setExportMsg] = useState<string | null>(null)
   const [posterError, setPosterError] = useState<string | null>(null)
+  const [backupMsg, setBackupMsg] = useState<string | null>(null)
+  const [takeOverError, setTakeOverError] = useState<string | null>(null)
+  const [takeOverArmed, confirmTakeOver] = useConfirm(5000)
+  const [restoreArmed, confirmRestore] = useConfirm(5000)
 
   const doExport = async () => {
     setExporting(true)
@@ -117,6 +122,25 @@ export function SettingsView({ snap, save }: { snap: AdminSnapshot; save: Save }
             <p className={`text-sm font-semibold ${snap.courtLink.connected ? 'text-ok' : 'text-red-400'}`}>
               {snap.courtLink.connected ? 'Connected to the host.' : (snap.courtLink.error ?? 'Not connected.')}
             </p>
+            {snap.state.competition && (
+              <div className="rounded-xl border border-red-500/30 bg-red-500/5 p-3 text-sm">
+                <p className="mb-2 text-muted">
+                  <b className="text-white">Host laptop broken?</b> This laptop has a full copy of the competition. Taking over makes it the host; the other court laptops then join this one.
+                </p>
+                <button
+                  onClick={() =>
+                    confirmTakeOver(async () => {
+                      const r = await window.kendoAdmin.takeOverHost()
+                      if (!r.ok) setTakeOverError(r.error)
+                    })
+                  }
+                  className={`rounded-lg px-4 py-2 font-bold ${takeOverArmed ? 'bg-red-600' : 'bg-surface-2 hover:bg-neutral-700'}`}
+                >
+                  {takeOverArmed ? 'Click again: take over as host' : 'Take over as host'}
+                </button>
+                {takeOverError && <p className="mt-1 text-red-400">{takeOverError}</p>}
+              </div>
+            )}
           </>
         ) : (
           <>
@@ -194,12 +218,59 @@ export function SettingsView({ snap, save }: { snap: AdminSnapshot; save: Save }
         </Card>
       )}
 
+      {!client && (
+        <Card title="Backups" hint="A copy of the competition is saved every 2 minutes while it changes (the newest 40 are kept). Restore one on this or any other laptop.">
+          <p className="text-sm text-muted">
+            Folder: <span className="text-white">{snap.backup.folder}</span>
+            {snap.backup.lastAt && <> · last backup {new Date(snap.backup.lastAt).toLocaleTimeString()}</>}
+          </p>
+          {snap.backup.error && <p className="text-sm text-red-400">{snap.backup.error}</p>}
+          <SettingInput value={s.backupDir} placeholder="Second backup folder, e.g. E:\Kendo backups (USB stick)" onSave={(backupDir) => void save({ backupDir })} />
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={async () => {
+                const r = await window.kendoAdmin.backupNow()
+                setBackupMsg(r.ok ? 'Backup saved.' : r.error)
+              }}
+              className="rounded-lg bg-surface-2 px-4 py-2 text-sm font-bold hover:bg-neutral-700"
+            >
+              Back up now
+            </button>
+            <button
+              onClick={() =>
+                confirmRestore(async () => {
+                  const r = await window.kendoAdmin.restoreBackup()
+                  if (r) setBackupMsg(r.ok ? 'Backup restored. Clocks are paused.' : r.error)
+                })
+              }
+              className={`rounded-lg px-4 py-2 text-sm font-bold ${restoreArmed ? 'bg-red-600' : 'bg-surface-2 hover:bg-neutral-700'}`}
+              title="Replaces the current competition (it is archived first)"
+            >
+              {restoreArmed ? 'Click again: choose a backup to load' : 'Restore from backup…'}
+            </button>
+          </div>
+          {backupMsg && <p className="text-sm text-muted">{backupMsg}</p>}
+        </Card>
+      )}
+
       <Card
         title="Results & diplomas"
         hint="Saves results.pdf, results.csv, diplomas for 1st, 2nd and both 3rd places (and captain PIN slips in team mode) to Documents › Kendo Tournament Manager. Happens automatically when the final is approved."
       >
         <button disabled={!t || exporting} onClick={doExport} className="rounded-xl bg-emerald-600 px-5 py-3 font-bold hover:bg-emerald-500 disabled:opacity-30">
           {exporting ? 'Saving…' : 'Export results now'}
+        </button>
+        <button
+          disabled={!t}
+          onClick={async () => {
+            const r = await window.kendoAdmin.exportGroupSheets()
+            if (r.ok) void window.kendoAdmin.openFolder(r.folder)
+            else setExportMsg(r.error)
+          }}
+          className="rounded-xl bg-surface-2 px-5 py-3 font-bold hover:bg-neutral-700 disabled:opacity-30"
+          title="Every group with its fighters and fight order, for the wall and the referees' table"
+        >
+          Group sheets to print (PDF)…
         </button>
         {exportMsg && <p className="text-sm text-muted">{exportMsg}</p>}
         <p className="text-xs text-muted">

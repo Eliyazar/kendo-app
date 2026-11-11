@@ -28,7 +28,7 @@ export interface LoadResult {
  * must resume exactly where it was, not minus the downtime. So the active
  * timer is frozen (paused at the current elapsed time) in the saved copy.
  */
-function freezeTimers(state: AppState, now: number): AppState {
+export function freezeTimers(state: AppState, now: number): AppState {
   const comp = state.competition
   if (!comp) return state
   const categories = comp.categories.map((t) => {

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { AdminAction } from './ipc'
-import { podium, toPublished } from './published'
+import { podium, podiumView, toPublished } from './published'
 import { initialState, reduceApp } from './reducer'
-import { diplomaHtml, diplomas, pinSlipsHtml, reportHtml, resultsCsv } from './report'
+import { diplomaHtml, diplomas, groupSheetsHtml, pinSlipsHtml, reportHtml, resultsCsv } from './report'
 import type { AppState, Side } from './types'
 
 let clock = 9_000_000
@@ -81,5 +81,18 @@ describe('final standings and documents', () => {
     s = act(s, { type: 'TIMER_START' })
     const shown = toPublished(s, 0)!
     expect(shown.categories[0]!.matches[0]!.aka.playerId).not.toBeNull()
+  })
+
+  it('podium on the TV only for a finished category, and group sheets list every pool', () => {
+    let s = finishedTournament('individual')
+    const t = s.competition!.categories[0]!
+    expect(podiumView(s.competition, null)).toBeNull()
+    s = act(s, { type: 'SHOW_PODIUM', categoryId: t.id })
+    expect(podiumView(s.competition, null)!.places.map((p) => p.place)).toEqual([1, 2, 3, 3])
+    s = act(s, { type: 'SHOW_PODIUM', categoryId: null })
+    expect(podiumView(s.competition, null)).toBeNull()
+    const html = groupSheetsHtml(s.competition!)
+    for (const pool of t.pools) expect(html).toContain(pool.name)
+    expect(html).toContain('Player 1')
   })
 })

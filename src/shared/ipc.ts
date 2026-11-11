@@ -25,6 +25,14 @@ export const IPC = {
   adminSetSettings: 'admin:set-settings',
   /** invoke, admin -> main: write results, PDFs and diplomas to a folder. */
   adminExport: 'admin:export',
+  /** invoke, admin -> main: save group-sheets.pdf. */
+  adminExportSheets: 'admin:export-sheets',
+  /** invoke, admin -> main: write a backup now. */
+  adminBackupNow: 'admin:backup-now',
+  /** invoke, admin -> main: pick a backup file and load it (host). */
+  adminRestoreBackup: 'admin:restore-backup',
+  /** invoke, admin -> main: a court laptop becomes the host with its copy of the competition. */
+  adminTakeOverHost: 'admin:take-over-host',
   /** invoke, admin -> main: save the A4 live-results poster. */
   adminExportPoster: 'admin:export-poster',
   /** invoke, admin -> main: open a folder in the file manager. */
@@ -64,6 +72,16 @@ export type AdminAction =
   | ({ type: 'APPROVE_MATCH' } & OnCourt)
   | ({ type: 'LOAD_MATCH'; matchId: string } & OnCourt)
   | ({ type: 'SET_REPRESENTATIVE'; side: Side; playerId: string } & OnCourt)
+  /** A fighter is not there yet: the loaded match moves behind the next two on this court. */
+  | ({ type: 'POSTPONE_MATCH' } & OnCourt)
+  /** The fighter on `side` cannot continue (injury): the opponent wins by kiken. */
+  | ({ type: 'KIKEN'; side: Side } & OnCourt)
+  /** Swap Aka and Shiro before the start (a team encounter as a whole). */
+  | ({ type: 'SWAP_SIDES' } & OnCourt)
+  /** This court takes over every remaining match of a pool from another court. */
+  | ({ type: 'TAKE_POOL'; poolId: string } & OnCourt)
+  /** Show a category's podium on this court's TV (null hides it). */
+  | ({ type: 'SHOW_PODIUM'; categoryId: string | null } & OnCourt)
   | { type: 'CREATE_TOURNAMENT'; setup: TournamentSetup }
   | { type: 'CREATE_COMPETITION'; setup: CompetitionSetup }
   | { type: 'RESET_TOURNAMENT' }
@@ -98,6 +116,11 @@ export const ADMIN_ACTION_TYPES: readonly AdminActionType[] = [
   'APPROVE_MATCH',
   'LOAD_MATCH',
   'SET_REPRESENTATIVE',
+  'POSTPONE_MATCH',
+  'KIKEN',
+  'SWAP_SIDES',
+  'TAKE_POOL',
+  'SHOW_PODIUM',
   'CREATE_TOURNAMENT',
   'CREATE_COMPETITION',
   'RESET_TOURNAMENT',
@@ -129,6 +152,8 @@ export interface AppSettings {
   online: { enabled: boolean; url: string; key: string }
   /** Several courts: this laptop hosts the tournament, or joins a host as one court. */
   court: { role: 'host' | 'client'; hostAddress: string; joinCode: string }
+  /** Second folder for the automatic backups (e.g. a USB stick); empty = only the default folder. */
+  backupDir: string
 }
 
 export interface SharingInfo {
@@ -187,6 +212,8 @@ export interface AdminSnapshot {
   devMode: boolean
   /** Same projection the public screen shows, for the live preview. */
   publicView: PublicView
+  /** Automatic backups (host). */
+  backup: { folder: string; lastAt: number | null; error: string | null }
 }
 
 export type DrawImportResult = ({ ok: true; files: string[] } & DrawImport) | { ok: false; error: string }
@@ -208,6 +235,10 @@ export interface AdminBridge {
   setSettings(patch: unknown): Promise<DispatchResult>
   exportResults(): Promise<ExportResult>
   exportPoster(): Promise<ExportResult>
+  exportGroupSheets(): Promise<ExportResult>
+  backupNow(): Promise<ExportResult>
+  restoreBackup(): Promise<DispatchResult | null>
+  takeOverHost(): Promise<DispatchResult>
   openFolder(path: string): Promise<void>
   onState(listener: (snapshot: AdminSnapshot) => void): Unsubscribe
 }

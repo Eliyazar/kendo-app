@@ -9,7 +9,7 @@ import type { DispatchResult } from '@shared/ipc'
 import { RuleError } from '@shared/match-engine'
 import { initialState, reduceApp, type AppAction } from '@shared/reducer'
 import type { AppState } from '@shared/types'
-import type { StateFile } from './persistence'
+import { freezeTimers, type StateFile } from './persistence'
 
 const TICK_MS = 100
 const RUNNING_SAVE_MS = 1000
@@ -48,6 +48,14 @@ export class Store {
       if (err instanceof RuleError) return { ok: false, error: err.message }
       throw err
     }
+  }
+
+  /** Replace the whole competition (restore a backup, or a court laptop taking over as host). Clocks are paused. */
+  replace(state: AppState, now = Date.now()): void {
+    if (this.state.competition) this.file.archive(this.state, now)
+    this.state = { ...freezeTimers(state, now), revision: Math.max(this.state.revision, state.revision) + 1 }
+    this.save(now)
+    this.onChange(this.state)
   }
 
   /** Start the clock loop: detects time-up and auto-saves every second while running. */

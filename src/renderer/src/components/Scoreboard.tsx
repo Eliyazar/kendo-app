@@ -3,7 +3,7 @@
 // Dark broadcast style: red and white mark the sides, not whole halves.
 
 import { useEffect, useState } from 'react'
-import type { Person, PublicCompetitor, PublicMatch, PublicView } from '@shared/public-view'
+import type { Person, PodiumView, PublicCompetitor, PublicMatch, PublicView } from '@shared/public-view'
 import { countryName } from '@shared/countries'
 import { FitText } from './FitText'
 import { Qr } from './Qr'
@@ -89,7 +89,57 @@ const who = (p: Person) => (
   </>
 )
 
+const MEDAL: Record<1 | 2 | 3, string> = { 1: '#e8b931', 2: '#c7ccd4', 3: '#c98a4b' }
+
+/** Award ceremony: 2nd, 1st, 3rd (two 3rd places in kendo) as podium steps. */
+function Podium({ podium }: { podium: PodiumView }) {
+  const at = (place: 1 | 2 | 3) => podium.places.filter((p) => p.place === place)
+  const step = (place: 1 | 2 | 3, height: number) => (
+    <div className="flex w-[560px] flex-col items-center justify-end gap-4">
+      {at(place).map((p) => (
+        <div key={p.name} className="flex w-full flex-col items-center gap-2 text-center">
+          <FitText text={p.name} max={place === 1 ? 84 : 64} min={36} className="display leading-none font-bold text-white" />
+          <div className="flex items-center gap-3 text-[30px] text-muted">
+            <CountryChip code={p.country} size={26} />
+            {p.country && <span className="font-semibold text-white/85">{countryName(p.country) ?? p.country}</span>}
+            {p.dojo && p.dojo !== p.name && <span className="truncate">{p.dojo}</span>}
+          </div>
+        </div>
+      ))}
+      <div className="display flex w-full items-start justify-center rounded-t-2xl pt-4 text-[120px] leading-none font-bold text-ink" style={{ height, background: MEDAL[place] }}>
+        {place}
+      </div>
+    </div>
+  )
+  return (
+    <main className="flex flex-1 flex-col items-center px-16 pt-10">
+      <div className="text-[40px] font-bold tracking-[0.5em] text-hansoku uppercase">Results</div>
+      <div className="display mt-2 text-[80px] leading-none font-bold">{podium.categoryName}</div>
+      <div className="mt-auto flex items-end gap-10">
+        {step(2, 220)}
+        {step(1, 320)}
+        {step(3, 150)}
+      </div>
+    </main>
+  )
+}
+
 export function Scoreboard({ view }: { view: PublicView | null }) {
+  if (view?.podium) {
+    return (
+      <div className="relative flex h-full w-full flex-col bg-ink text-white">
+        <header className="flex h-[104px] items-center justify-between border-b border-line px-16">
+          <div className="truncate text-[30px] font-semibold tracking-[0.2em] text-muted uppercase">{view.tournamentName}</div>
+          {view.multiCourt && <span className="display text-[40px] font-semibold tracking-wider text-muted">{view.courtName}</span>}
+        </header>
+        <Podium podium={view.podium} />
+      </div>
+    )
+  }
+  return <Board view={view} />
+}
+
+function Board({ view }: { view: PublicView | null }) {
   const m = view?.match ?? null
   const flash = useTimeUpFlash(m)
 

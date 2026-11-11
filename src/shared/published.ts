@@ -5,7 +5,7 @@
 // Fairness: a team's order for an encounter that has not started is NOT public,
 // so opponents cannot adapt. It appears once the encounter's first bout starts.
 
-import { matchLabel, positionLabel, toPublicView, type PublicView } from './public-view'
+import { describeEntrant, matchLabel, positionLabel, toPublicView, type PodiumView, type PublicView } from './public-view'
 import { encounterOpen, entrantOf, lineupOf, tallyEncounter } from './encounters'
 import { markLetter } from './marks'
 import { computeScore } from './match-engine'
@@ -364,3 +364,10 @@ export async function pinHash(salt: string, teamId: Id, pin: string): Promise<st
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('')
 }
 
+/** The podium a court's TV shows during an award ceremony, or null. */
+export function podiumView(comp: Competition | null, courtId: Id | null): PodiumView | null {
+  const slot = comp?.courts.find((c) => c.id === courtId) ?? comp?.courts[0]
+  const t = slot?.podiumCategoryId ? comp!.categories.find((c) => c.id === slot.podiumCategoryId) : undefined
+  if (!t) return null
+  return { categoryName: t.name, places: podium(t).map(({ place, entrantId }) => ({ ...describeEntrant(t, entrantId), place })) }
+}

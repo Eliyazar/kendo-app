@@ -3,6 +3,7 @@
 import { tallyEncounter } from '@shared/encounters'
 import { podium } from '@shared/published'
 import { champion, describeEntrant, roundName } from '@shared/public-view'
+import type { AdminAction } from '@shared/ipc'
 import type { BracketNode, Side, Tournament } from '@shared/types'
 
 function nodeScore(t: Tournament, node: BracketNode): { aka: string; shiro: string; live: boolean } | null {
@@ -52,13 +53,27 @@ function NodeCard({ t, node }: { t: Tournament; node: BracketNode }) {
   )
 }
 
-export function BracketView({ t }: { t: Tournament }) {
+/** Award ceremony: put this category's podium on this court's TV (or take it off). */
+function PodiumButton({ t, shown, send }: { t: Tournament; shown: boolean; send?: ((a: AdminAction) => void) | undefined }) {
+  if (!send || t.phase !== 'finished') return null
+  return (
+    <button
+      onClick={() => send({ type: 'SHOW_PODIUM', categoryId: shown ? null : t.id })}
+      className={`rounded-xl px-5 py-2.5 font-bold ${shown ? 'bg-amber-500 text-ink hover:bg-amber-400' : 'bg-emerald-600 hover:bg-emerald-500'}`}
+    >
+      {shown ? 'Hide podium from TV' : '🏆 Show podium on TV'}
+    </button>
+  )
+}
+
+export function BracketView({ t, send, podiumShown = false }: { t: Tournament; send?: (a: AdminAction) => void; podiumShown?: boolean }) {
   const b = t.bracket
   if (!b && t.bracketPlan?.kind === 'none') {
     const places = podium(t)
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-white/15 text-white/60">
         <p>No elimination in this category: the pool ranking gives 1st, 2nd and 3rd place.</p>
+        <PodiumButton t={t} shown={podiumShown} send={send} />
         {places.map((p) => (
           <div key={p.entrantId} className="text-lg">
             <b className="mr-2 text-amber-300">{p.place}.</b>
@@ -101,6 +116,9 @@ export function BracketView({ t }: { t: Tournament }) {
               <div className="text-2xl">🏆</div>
               <div className="text-lg font-black">{champ.name}</div>
               <div className="text-sm text-white/50">{champ.dojo}</div>
+              <div className="mt-3">
+                <PodiumButton t={t} shown={podiumShown} send={send} />
+              </div>
             </>
           ) : (
             <span className="text-white/30">—</span>

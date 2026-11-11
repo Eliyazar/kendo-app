@@ -1,11 +1,11 @@
 // Main-process side of the IPC bridge.
 // Only the Admin window may change state; the Public window is read-only.
 
-import { ipcMain, shell, type BrowserWindow, type IpcMainInvokeEvent } from 'electron'
+import { BrowserWindow, dialog, ipcMain, shell, type IpcMainInvokeEvent } from 'electron'
 import { ADMIN_ACTION_TYPES, IPC, type AdminAction, type AdminSnapshot, type DispatchResult, type DrawImportResult, type ExportResult, type ImportResult } from '@shared/ipc'
 import type { PublicView } from '@shared/public-view'
 import type { AppContext } from './context'
-import { exportPoster, exportResults } from './export'
+import { exportGroupSheets, exportPoster, exportResults } from './export'
 import { importDraw, importParticipants } from './import'
 import { mergeSettings } from './settings'
 
@@ -24,6 +24,7 @@ const optCourt = (a: Record<string, unknown>): boolean => a['courtId'] === undef
 /** Required string fields per action; deeper checks happen in the reducer. */
 const STRING_FIELDS: Partial<Record<AdminAction['type'], string[]>> = {
   LOAD_MATCH: ['matchId'],
+  TAKE_POOL: ['poolId'],
   WITHDRAW_ENTRANT: ['entrantId'],
   REMOVE_ENTRANT: ['entrantId'],
   EDIT_PLAYER: ['playerId'],
@@ -61,7 +62,8 @@ export function parseAdminAction(input: unknown, allowDev: boolean): AdminAction
   if (!ADMIN_ACTION_TYPES.includes(type) || !optCourt(a)) return null
   if (type === 'DEV_LOAD_DEMO' && !allowDev) return null
   if (type === 'ADD_IPPON' && !(SIDES.includes(a['side'] as string) && TECHNIQUES.includes(a['technique'] as string))) return null
-  if ((type === 'ADD_HANSOKU' || type === 'FUSEN_GACHI' || type === 'SET_REPRESENTATIVE') && !SIDES.includes(a['side'] as string)) return null
+  if ((type === 'ADD_HANSOKU' || type === 'FUSEN_GACHI' || type === 'SET_REPRESENTATIVE' || type === 'KIKEN') && !SIDES.includes(a['side'] as string)) return null
+  if (type === 'SHOW_PODIUM' && a['categoryId'] !== null && !str(a['categoryId'])) return null
   if (type === 'SET_REPRESENTATIVE' && !str(a['playerId'])) return null
   if (type === 'TIMER_ADJUST' && !(Number.isFinite(a['deltaMs']) && Math.abs(a['deltaMs'] as number) <= 30 * 60_000)) return null
   if (type === 'TIMER_SET_DURATION' && !(Number.isFinite(a['durationMs']) && (a['durationMs'] as number) > 0 && (a['durationMs'] as number) <= 30 * 60_000)) return null
@@ -110,6 +112,22 @@ export function registerIpc(ctx: AppContext, windows: WindowRefs): void {
     return { ok: true }
   })
 
+  ipcMain.handle(IPC.adminExportSheets, (e): Promise<ExportResult> | ExportResult => (fromAdmin(e) ? exportGroupSheets(ctx.getState()) : { ok: false, error: 'Not allowed.' }))
+  ipcMain.handle(IPC.adminBackupNow, async (e): Promise<ExportResult> => {
+    if (!fromAdmin(e)) return { ok: false, error: 'Not allowed.' }
+    const r = await ctx.backups.run(true)
+    ctx.broadcast()
+    return r.ok ? { ok: true, folder: r.folder, files: 1 } : r
+  })
+  ipcMain.handle(IPC.adminRestoreBackup, async (e): Promise<DispatchResult | null> => {
+    if (!fromAdmin(e)) return { ok: false, error: 'Not allowed.' }
+    const parent = BrowserWindow.fromWebContents(e.sender)
+    const options = { title: 'Restore a backup', defaultPath: ctx.snapshot().backup.folder, properties: ['openFile' as const], filters: [{ name: 'Backup', extensions: ['json'] }] }
+    const res = parent ? await dialog.showOpenDialog(parent, options) : await dialog.showOpenDialog(options)
+    if (res.canceled || !res.filePaths[0]) return null
+    return ctx.restoreBackup(res.filePaths[0])
+  })
+  ipcMain.handle(IPC.adminTakeOverHost, (e): DispatchResult => (fromAdmin(e) ? ctx.takeOverAsHost() : { ok: false, error: 'Not allowed.' }))
   ipcMain.handle(IPC.adminExportPoster, (e): Promise<ExportResult> | ExportResult =>
     fromAdmin(e) ? exportPoster(ctx.getState(), ctx.publisher.getStatus().publicUrl) : { ok: false, error: 'Not allowed.' }
   )

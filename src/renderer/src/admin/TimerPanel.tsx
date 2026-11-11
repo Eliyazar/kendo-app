@@ -67,9 +67,13 @@ interface Props {
   match: Match
   now: () => number
   send: (a: AdminAction) => void
+  /** The loaded match can be pushed back (a fighter is not there yet). */
+  canLater?: boolean
+  /** Aka and Shiro can still be swapped. */
+  canSwap?: boolean
 }
 
-export function TimerPanel({ match, now, send }: Props) {
+export function TimerPanel({ match, now, send, canLater = false, canSwap = false }: Props) {
   const running = match.timer.runningSince !== null
   useTicker(running)
   const t = now()
@@ -183,6 +187,27 @@ export function TimerPanel({ match, now, send }: Props) {
         <span aria-hidden>↶</span> Undo{last ? `: ${describeEvent(last)}` : ''}
         <kbd className="ml-2 rounded bg-white/10 px-1.5 text-xs text-white/60">Ctrl+Z</kbd>
       </button>
+
+      {(canLater || canSwap) && (
+        <div className="mt-3 grid grid-cols-2 gap-3">
+          <button
+            disabled={!canLater}
+            onClick={() => send({ type: 'POSTPONE_MATCH' })}
+            className="h-11 rounded-xl bg-neutral-800 text-sm font-semibold hover:bg-neutral-700 disabled:opacity-30"
+            title="A fighter is not here yet: fight the next two matches first"
+          >
+            ⏭ Later — fighter not here
+          </button>
+          <button
+            disabled={!canSwap}
+            onClick={() => send({ type: 'SWAP_SIDES' })}
+            className="h-11 rounded-xl bg-neutral-800 text-sm font-semibold hover:bg-neutral-700 disabled:opacity-30"
+            title="The fighters stand on the wrong sides"
+          >
+            ⇄ Swap Aka / Shiro
+          </button>
+        </div>
+      )}
     </section>
   )
 }

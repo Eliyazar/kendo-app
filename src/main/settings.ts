@@ -9,7 +9,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   port: 7777,
   courtId: null,
   online: { enabled: false, url: '', key: '' },
-  court: { role: 'host', hostAddress: '', joinCode: '' }
+  court: { role: 'host', hostAddress: '', joinCode: '' },
+  backupDir: ''
 }
 
 export class SettingsFile {
@@ -53,6 +54,7 @@ export function mergeSettings(current: AppSettings, patch: unknown): AppSettings
     if (!Number.isInteger(port) || (port as number) < 1024 || (port as number) > 65535) return 'Port must be 1024–65535.'
     next.port = port as number
   }
+  if (typeof p['backupDir'] === 'string') next.backupDir = p['backupDir'].trim().slice(0, 400)
   if ('courtId' in p) next.courtId = typeof p['courtId'] === 'string' ? p['courtId'] : null
   if (typeof p['online'] === 'object' && p['online'] !== null) {
     const o = p['online'] as Record<string, unknown>

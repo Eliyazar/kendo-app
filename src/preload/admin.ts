@@ -9,6 +9,10 @@ const bridge: AdminBridge = {
   setSettings: (patch) => ipcRenderer.invoke(IPC.adminSetSettings, patch),
   exportResults: () => ipcRenderer.invoke(IPC.adminExport),
   exportPoster: () => ipcRenderer.invoke(IPC.adminExportPoster),
+  exportGroupSheets: () => ipcRenderer.invoke(IPC.adminExportSheets),
+  backupNow: () => ipcRenderer.invoke(IPC.adminBackupNow),
+  restoreBackup: () => ipcRenderer.invoke(IPC.adminRestoreBackup),
+  takeOverHost: () => ipcRenderer.invoke(IPC.adminTakeOverHost),
   openFolder: (folder) => ipcRenderer.invoke(IPC.adminOpenFolder, folder),
   onState: (listener) => {
     const handler = (_e: IpcRendererEvent, snapshot: AdminSnapshot): void => listener(snapshot)

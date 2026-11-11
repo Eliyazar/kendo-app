@@ -3,12 +3,15 @@
 // (mirrors the host and operates one court).
 
 import { randomBytes } from 'node:crypto'
+import path from 'node:path'
 import type { BrowserWindow } from 'electron'
 import { IPC, type AdminAction, type AdminSnapshot, type DispatchResult, type Notice } from '@shared/ipc'
+import { podiumView } from '@shared/published'
 import { toPublicView, type PublicView } from '@shared/public-view'
 import type { AppState } from '@shared/types'
+import { Backups, readBackup } from './backup'
 import { CourtClient } from './court-client'
-import { exportResults } from './export'
+import { documentsBase, exportResults } from './export'
 import type { StateFile } from './persistence'
 import { Publisher } from './publisher'
 import { courtLetter, lanAddresses, LocalServer } from './server'
@@ -29,7 +32,12 @@ const COURT_ACTIONS: ReadonlySet<AdminAction['type']> = new Set([
   'START_ENCHO',
   'APPROVE_MATCH',
   'LOAD_MATCH',
-  'SET_REPRESENTATIVE'
+  'SET_REPRESENTATIVE',
+  'POSTPONE_MATCH',
+  'KIKEN',
+  'SWAP_SIDES',
+  'TAKE_POOL',
+  'SHOW_PODIUM'
 ])
 
 /** What a court laptop may do on the host. */
@@ -47,6 +55,7 @@ export class AppContext {
   readonly client: CourtClient
   readonly server: LocalServer
   readonly publisher: Publisher
+  readonly backups: Backups
   private notices: Notice[] = []
   /** Phase of each category at the last change, to notice when one finishes. */
   private lastPhases = new Map<string, string>()
@@ -76,6 +85,11 @@ export class AppContext {
       rendererDir: paths.rendererDir,
       devUrl: paths.devUrl
     })
+    this.backups = new Backups({
+      getState: () => this.store.getState(),
+      folders: () => [path.join(documentsBase(), 'backups'), ...(this.settings.get().backupDir ? [this.settings.get().backupDir] : [])],
+      enabled: () => !this.isClient
+    })
     this.publisher = new Publisher({
       getState: () => this.store.getState(),
       config: () => this.settings.get().online,
@@ -95,6 +109,7 @@ export class AppContext {
       this.store.start()
       this.publisher.start()
     }
+    this.backups.start()
     await this.restartServer()
   }
 
@@ -118,7 +133,33 @@ export class AppContext {
     this.broadcast()
   }
 
+  /** A court laptop becomes the host with its own copy of the competition (the host laptop is broken). */
+  takeOverAsHost(): DispatchResult {
+    if (!this.isClient) return { ok: false, error: 'This laptop is already the host.' }
+    const state = this.client.getState()
+    if (!state.competition) return { ok: false, error: 'This laptop has no copy of the competition yet.' }
+    const s = this.settings.get()
+    this.settings.set({ ...s, lanSharing: true, court: { ...s.court, role: 'host', joinCode: s.court.joinCode || randomBytes(3).toString('hex').toUpperCase() } })
+    this.store.replace(state)
+    this.applyRole()
+    void this.restartServer()
+    this.notice('This laptop is now the host. Other court laptops: join this laptop with its address and join code (Settings → Courts).', 'info')
+    void this.backups.run(true)
+    return { ok: true }
+  }
+
+  /** Load a backup file into this (host) laptop. */
+  async restoreBackup(file: string): Promise<DispatchResult> {
+    if (this.isClient) return { ok: false, error: 'Restore on the host laptop.' }
+    const state = await readBackup(file)
+    if (typeof state === 'string') return { ok: false, error: state }
+    this.store.replace(state)
+    this.notice(`Restored "${state.competition!.name}" from the backup. Clocks are paused.`, 'info')
+    return { ok: true }
+  }
+
   stop(): void {
+    this.backups.stop()
     this.store.stop()
     this.client.stop()
     this.publisher.stop()
@@ -174,7 +215,8 @@ export class AppContext {
 
   publicView(): PublicView {
     const onlineUrl = this.isClient ? this.client.onlineUrl : this.publisher.getStatus().publicUrl
-    return { ...toPublicView(this.getState(), this.courtId() ?? undefined), onlineUrl }
+    const state = this.getState()
+    return { ...toPublicView(state, this.courtId() ?? undefined), onlineUrl, podium: podiumView(state.competition, this.courtId()) }
   }
 
   snapshot(): AdminSnapshot {
@@ -198,7 +240,8 @@ export class AppContext {
       serverNow: Date.now() + (this.isClient ? this.client.clockOffset() : 0),
       recovered: !this.isClient && this.store.recovered,
       devMode: this.devMode,
-      publicView: this.publicView()
+      publicView: this.publicView(),
+      backup: { folder: path.join(documentsBase(), 'backups'), lastAt: this.backups.lastAt, error: this.backups.lastError }
     }
   }
 

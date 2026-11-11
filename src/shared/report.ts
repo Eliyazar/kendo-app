@@ -8,7 +8,7 @@ import { describeCompetitor, describeEntrant, matchLabel, positionLabel, roundNa
 import { computeScore } from './match-engine'
 import { markLetter } from './marks'
 import { computeStandings } from './standings'
-import type { Id, Match, Tournament } from './types'
+import type { Competition, Id, Match, Tournament } from './types'
 
 const esc = (s: string): string => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!)
 
@@ -255,4 +255,45 @@ h1 { font-size: 26pt; margin: 4mm 0 1mm } .date { font-size: 13pt; color: #555 }
 <div class="url">${esc(site)}</div>
 <div class="code">Tournament code · Код на турнира: <b>${esc(code)}</b></div>
 </div></body></html>`
+}
+
+/** Group sheets for the wall and the table: every pool with its entrants and fight order, results left blank. */
+export function groupSheetsHtml(comp: Competition): string {
+  const courtName = (id: Id) => comp.courts.find((c) => c.id === id)?.name ?? ''
+  const blocks = comp.categories.flatMap((t) =>
+    t.pools.map((pool) => {
+      const entrants = pool.entrantIds
+        .map((id, i) => {
+          const who = describeEntrant(t, id)
+          const members = t.teams[id]?.members.map((m) => t.players[m]?.name).filter(Boolean).join(', ') ?? ''
+          return `<tr><td class="n">${i + 1}</td><td><b>${esc(who.name)}</b>${members ? `<div class="m">${esc(members)}</div>` : ''}</td><td>${esc(who.country ?? '')}</td><td>${esc(who.dojo !== who.name ? who.dojo : '')}</td></tr>`
+        })
+        .join('')
+      // One line per meeting (a team encounter counts once), in fighting order.
+      const seen = new Set<Id>()
+      const meetings = t.matchQueue
+        .map((id) => t.matches[id])
+        .filter((m): m is Match => Boolean(m && m.poolId === pool.id && (!m.teamMatchId || !seen.has(m.teamMatchId)) && (m.teamMatchId ? seen.add(m.teamMatchId) : true)))
+      const court = meetings[0] ? courtName(meetings[0].courtId) : ''
+      const rows = meetings
+        .map((m, i) => {
+          const tm = m.teamMatchId ? t.teamMatches[m.teamMatchId] : undefined
+          const aka = tm ? describeEntrant(t, tm.akaTeamId).name : describeCompetitor(t, m.aka).name
+          const shiro = tm ? describeEntrant(t, tm.shiroTeamId).name : describeCompetitor(t, m.shiro).name
+          const done = tm ? (tm.result ? `${tm.result.akaWins} : ${tm.result.shiroWins}` : null) : m.result ? `${m.result.akaIppons} : ${m.result.shiroIppons}` : null
+          return `<tr><td class="n">${i + 1}</td><td><span class="a">●</span> ${esc(aka)}</td><td class="r${done ? ' d' : ''}">${done ?? '____ : ____'}</td><td><span class="s">○</span> ${esc(shiro)}</td></tr>`
+        })
+        .join('')
+      return `<section><div class="cat">${esc(t.name)}</div><h2>${esc(pool.name)}${court ? ` <span class="c">${esc(court)}</span>` : ''}</h2>
+<table class="e"><tr><th>#</th><th>${t.mode === 'team' ? 'Team' : 'Name'}</th><th>Country</th><th>Club</th></tr>${entrants}</table>
+<table class="f"><tr><th>#</th><th>Aka</th><th class="r">Result</th><th>Shiro</th></tr>${rows}</table></section>`
+    })
+  )
+  return `<!doctype html><html><head><meta charset="utf-8"><style>
+@page { size: A4; margin: 12mm } body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 10pt; color: #111 }
+h1 { font-size: 16pt; margin: 0 0 4mm } section { break-inside: avoid; margin-bottom: 8mm; border: 0.3mm solid #bbb; border-radius: 2mm; padding: 4mm 5mm }
+.cat { font-size: 9pt; color: #9e1626; font-weight: bold; text-transform: uppercase; letter-spacing: 0.1em } h2 { font-size: 15pt; margin: 1mm 0 3mm } .c { font-size: 10pt; color: #555; font-weight: normal }
+table { border-collapse: collapse; width: 100%; margin-bottom: 3mm } th, td { text-align: left; padding: 1.2mm 1.5mm; border-bottom: 0.2mm solid #ddd; vertical-align: top } th { font-size: 8pt; color: #666; text-transform: uppercase }
+.n { width: 7mm; color: #666 } .m { font-size: 8pt; color: #555 } .r { text-align: center; width: 30mm; color: #999 } .a { color: #c8102e } .s { color: #888 } .d { color: #111; font-weight: bold }
+</style></head><body><h1>${esc(comp.name)} · ${esc(longDate(comp.date))} · Groups</h1>${blocks.join('') || '<p>No groups yet.</p>'}</body></html>`
 }

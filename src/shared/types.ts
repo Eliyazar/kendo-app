@@ -325,6 +325,8 @@ export interface CourtSlot {
   categoryId: Id | null
   /** The operator loaded this match by hand: the court stays on it until it is done. */
   pinnedMatchId?: Id
+  /** Award ceremony: this court's TV shows the podium of this category. */
+  podiumCategoryId?: Id
 }
 
 /**

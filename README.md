@@ -64,6 +64,9 @@ When the groups are made by someone else in Excel, use **Setup → Import draw f
 - **Withdraw** someone: if nobody in their pool has fought yet, they simply leave the pool. Otherwise their remaining matches are lost by **kiken** (the opponent wins 2–0). In the bracket, the opponent advances.
 - **During a match** (shiai-jo screen): click the big clock to set any time (e.g. `1:23`), or click **Regulation** to change this match's length; the clock must be paused. The ✎ next to a fighter's name fixes the name, country and club on the spot.
 - **Team orders on paper**: the **Team orders** strip on the shiai-jo screen lists the next encounters on this court (with how many orders are set). Click one and pick each position as written on the captain's paper; picking a player who is already placed swaps the two.
+- **Match screen tools**: **Later — fighter not here** pushes the loaded match behind the next two with other fighters; **Swap Aka / Shiro** before the start; **Kiken** (after the start) when a fighter cannot continue: the opponent wins 2–0, points already scored stand.
+- **Award ceremony**: **Show podium on TV** (Bracket tab, or the free-court screen) shows 1st, 2nd and both 3rd places on this court's TV until **Back to the match**.
+- **Group sheets**: *Settings → Results & diplomas → Group sheets to print* — every group with fighters and fight order (played results filled in).
 - **Remove from group** (pool phase only): deletes the person or team from their pool together with all their pool matches, played ones too, as if they had never been drawn. Use **Withdraw** instead when results against them should stand.
 - **Late entry** (pool phase): joins the smallest pool and gets a match against every member.
 - **Edit result** (✎ in the match order) corrects an approved match. Pool results can change until the pools are locked. A bracket result can change who advances only while the next round has not started.
@@ -79,6 +82,11 @@ Every court has its own laptop and TV:
 - One laptop is the **host**: it owns the tournament, runs every clock and saves everything. Turn on local network sharing there. Settings shows the host address and a **join code**.
 - Each other court's laptop chooses **Join a host as a court**, enters the address and code, and picks its court.
 - Pools are spread over the courts. **Load here** in the match order moves a waiting match to your court. The final is on the first court.
+- **No fighter on two courts at once**: the same person in two categories (matched by name) is never called on one court while fighting on another; the court takes the next possible match, or shows "Waiting: X is fighting on Shiai-jo B".
+- **A free court helps**: when a court has nothing left, it offers **Take over** for a whole group another court has not started (the last one in that court's order). Groups are never split.
+- **Host laptop broken**: on any court laptop, *Settings → Courts → Take over as host*. It continues with its own copy; the other court laptops join it.
+- **Backups** every 2 minutes to `Documents/Kendo Tournament Manager/backups` (and a second folder, e.g. a USB stick). *Settings → Backups → Restore from backup…* loads one on any laptop.
+- **Network**: use your own router (cable for the host if possible) rather than the venue Wi-Fi; a court laptop cannot score while it is disconnected.
 
 ### Online results (phones, people at home)
 
