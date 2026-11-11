@@ -5,7 +5,7 @@ import { ipcMain, shell, type BrowserWindow, type IpcMainInvokeEvent } from 'ele
 import { ADMIN_ACTION_TYPES, IPC, type AdminAction, type AdminSnapshot, type DispatchResult, type DrawImportResult, type ExportResult, type ImportResult } from '@shared/ipc'
 import type { PublicView } from '@shared/public-view'
 import type { AppContext } from './context'
-import { exportResults } from './export'
+import { exportPoster, exportResults } from './export'
 import { importDraw, importParticipants } from './import'
 import { mergeSettings } from './settings'
 
@@ -110,6 +110,9 @@ export function registerIpc(ctx: AppContext, windows: WindowRefs): void {
     return { ok: true }
   })
 
+  ipcMain.handle(IPC.adminExportPoster, (e): Promise<ExportResult> | ExportResult =>
+    fromAdmin(e) ? exportPoster(ctx.getState(), ctx.publisher.getStatus().publicUrl) : { ok: false, error: 'Not allowed.' }
+  )
   ipcMain.handle(IPC.adminExport, (e): Promise<ExportResult> | ExportResult =>
     fromAdmin(e) ? exportResults(ctx.getState(), ctx.publisher.getStatus().publicUrl) : { ok: false, error: 'Not allowed.' }
   )

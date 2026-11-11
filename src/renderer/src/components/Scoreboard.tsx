@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react'
 import type { Person, PublicCompetitor, PublicMatch, PublicView } from '@shared/public-view'
 import { countryName } from '@shared/countries'
 import { FitText } from './FitText'
+import { Qr } from './Qr'
 import { CountryChip, HansokuIcon, MarkBadge, MarkSlot } from './Marks'
 
 const TIME_UP_FLASH_MS = 4000
@@ -126,10 +127,19 @@ export function Scoreboard({ view }: { view: PublicView | null }) {
               </div>
             </div>
           ) : (
-            <>
-              <div className="display text-[110px] font-bold">{view?.tournamentName ?? 'Kendo Tournament Manager'}</div>
-              <div className="text-[44px] text-muted">{view?.multiCourt ? `${view.courtName} · ` : ''}Waiting for the next match</div>
-            </>
+            <div className="flex items-center gap-24 px-16">
+              <div className="flex max-w-[1100px] flex-col gap-6">
+                <div className="display text-[96px] leading-none font-bold">{view?.tournamentName ?? 'Kendo Tournament Manager'}</div>
+                <div className="text-[44px] text-muted">{view?.multiCourt ? `${view.courtName} · ` : ''}Waiting for the next match</div>
+              </div>
+              {view?.onlineUrl && (
+                <div className="flex shrink-0 flex-col items-center gap-5">
+                  <Qr text={view.onlineUrl} size={380} className="rounded-2xl p-3" />
+                  <div className="text-[34px] font-bold tracking-[0.2em] text-hansoku uppercase">Live results</div>
+                  <div className="text-[28px] text-muted">Scan with your phone camera</div>
+                </div>
+              )}
+            </div>
           )}
         </main>
       )}
@@ -149,6 +159,16 @@ export function Scoreboard({ view }: { view: PublicView | null }) {
             <span className="text-muted">—</span>
           )}
         </span>
+        {m && view?.onlineUrl && (
+          <span className="ml-auto flex shrink-0 items-center gap-5">
+            <span className="text-right text-[24px] leading-tight font-bold tracking-[0.2em] text-muted uppercase">
+              Live
+              <br />
+              results
+            </span>
+            <Qr text={view.onlineUrl} size={88} className="rounded-md p-1" />
+          </span>
+        )}
       </footer>
 
       {flash && (

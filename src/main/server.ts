@@ -19,6 +19,8 @@ export interface ServerDeps {
   /** Apply an action sent by a court laptop (already validated). */
   dispatchFromCourt(input: unknown, courtId: string): DispatchResult
   joinCode(): string
+  /** Online results link, passed on to court laptops for their TV's QR code. */
+  onlineUrl(): string | null
   /** Built renderer files (production). */
   rendererDir: string
   /** Vite dev server URL (development): page requests are proxied there. */
@@ -127,7 +129,7 @@ export class LocalServer {
     const body =
       l.kind === 'view'
         ? JSON.stringify(toPublicView(state, resolveCourt(state.competition, l.court)))
-        : JSON.stringify({ state, serverNow: Date.now() })
+        : JSON.stringify({ state, serverNow: Date.now(), onlineUrl: this.deps.onlineUrl() })
     if (l.kind === 'view' && body === l.last) return
     l.last = body
     l.res.write(`data: ${body}\n\n`)

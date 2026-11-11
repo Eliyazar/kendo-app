@@ -8,7 +8,8 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { app, BrowserWindow } from 'electron'
 import type { ExportResult } from '@shared/ipc'
-import { diplomaHtml, diplomas, pinSlipsHtml, reportHtml, resultsCsv } from '@shared/report'
+import QRCode from 'qrcode'
+import { diplomaHtml, diplomas, pinSlipsHtml, posterHtml, reportHtml, resultsCsv } from '@shared/report'
 import type { AppState, Id } from '@shared/types'
 
 const safe = (s: string): string => s.replace(/[<>:"/\\|?*\x00-\x1f]+/g, '_').trim().slice(0, 60) || 'competition'
@@ -35,12 +36,36 @@ async function diplomaBackground(): Promise<string | undefined> {
 }
 
 /** Export every category, or only `categoryId`. */
+function competitionFolder(state: AppState): string {
+  const comp = state.competition!
+  // A rehearsal copy (KENDO_PROFILE_DIR) keeps its exports in its own data folder.
+  const base = process.env['KENDO_PROFILE_DIR'] ? path.join(app.getPath('userData'), 'exports') : path.join(app.getPath('documents'), 'Kendo Tournament Manager')
+  return path.join(base, safe(`${comp.date} ${comp.name}`))
+}
+
+/** live-results-poster.pdf in the competition folder. */
+export async function exportPoster(state: AppState, onlineUrl: string | null): Promise<ExportResult> {
+  const comp = state.competition
+  if (!comp) return { ok: false, error: 'No competition loaded.' }
+  if (!onlineUrl) return { ok: false, error: 'Turn on "Publish results online" first.' }
+  const folder = competitionFolder(state)
+  const win = new BrowserWindow({ show: false, webPreferences: { sandbox: true, javascript: false } })
+  try {
+    await fs.mkdir(folder, { recursive: true })
+    const qr = await QRCode.toString(onlineUrl, { type: 'svg', margin: 1, errorCorrectionLevel: 'M' })
+    await fs.writeFile(path.join(folder, 'live-results-poster.pdf'), await htmlToPdf(win, posterHtml(comp.name, comp.date, onlineUrl, qr), false))
+    return { ok: true, folder, files: 1 }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) }
+  } finally {
+    win.destroy()
+  }
+}
+
 export async function exportResults(state: AppState, onlineUrl: string | null = null, categoryId?: Id): Promise<ExportResult> {
   const comp = state.competition
   if (!comp) return { ok: false, error: 'No competition loaded.' }
-  // A rehearsal copy (KENDO_PROFILE_DIR) keeps its exports in its own data folder.
-  const base = process.env['KENDO_PROFILE_DIR'] ? path.join(app.getPath('userData'), 'exports') : path.join(app.getPath('documents'), 'Kendo Tournament Manager')
-  const folder = path.join(base, safe(`${comp.date} ${comp.name}`))
+  const folder = competitionFolder(state)
   const categories = comp.categories.filter((c) => !categoryId || c.id === categoryId)
   const single = comp.categories.length === 1
   const win = new BrowserWindow({ show: false, webPreferences: { sandbox: true, javascript: false } })

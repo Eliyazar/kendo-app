@@ -18,6 +18,7 @@ export function hostUrl(address: string): string {
 
 export class CourtClient {
   private state: AppState = initialState()
+  private hostOnlineUrl: string | null = null
   private offset = 0
   private abort: AbortController | null = null
   private retry: NodeJS.Timeout | null = null
@@ -28,6 +29,11 @@ export class CourtClient {
 
   getState(): AppState {
     return this.state
+  }
+
+  /** The host's online results link (for the QR code on this court's TV). */
+  get onlineUrl(): string | null {
+    return this.hostOnlineUrl
   }
 
   /** Host clock minus local clock, for timer display. */
@@ -98,8 +104,9 @@ export class CourtClient {
             .map((l) => l.slice(6))
             .join('\n')
           if (!data) continue
-          const msg = JSON.parse(data) as { state: AppState; serverNow: number }
+          const msg = JSON.parse(data) as { state: AppState; serverNow: number; onlineUrl?: string | null }
           this.state = msg.state
+          this.hostOnlineUrl = typeof msg.onlineUrl === 'string' ? msg.onlineUrl : null
           this.offset = msg.serverNow - Date.now()
           this.deps.onChange()
         }

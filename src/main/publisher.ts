@@ -5,8 +5,9 @@ import type { AdminAction, DispatchResult, OnlineStatus } from '@shared/ipc'
 import { openLineups, pinHash, slugFor, toPublished, type LineupSubmission, type PublishPayload } from '@shared/published'
 import type { AppState } from '@shared/types'
 
-const MIN_INTERVAL_MS = 1000
-const INBOX_INTERVAL_MS = 5000
+/** At most one upload per 5 s (free Cloudflare plan: 100,000 requests a day). */
+const MIN_INTERVAL_MS = 5000
+const INBOX_INTERVAL_MS = 15_000
 const TIMEOUT_MS = 8000
 
 export interface PublisherDeps {

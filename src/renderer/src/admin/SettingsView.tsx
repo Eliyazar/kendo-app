@@ -1,8 +1,8 @@
 // Stream overlay, courts (host / court laptop), online results and export.
 
 import { useEffect, useState, type ReactNode } from 'react'
-import QRCode from 'qrcode'
 import type { AdminSnapshot, AppSettings } from '@shared/ipc'
+import { Qr } from '../components/Qr'
 
 type Save = (patch: unknown) => Promise<boolean>
 
@@ -48,13 +48,6 @@ function Copyable({ text }: { text: string }) {
   )
 }
 
-function Qr({ text }: { text: string }) {
-  const [svg, setSvg] = useState('')
-  useEffect(() => {
-    void QRCode.toString(text, { type: 'svg', margin: 1, color: { dark: '#0b0d12', light: '#ffffff' } }).then(setSvg)
-  }, [text])
-  return <div className="h-40 w-40 overflow-hidden rounded-xl bg-white" dangerouslySetInnerHTML={{ __html: svg }} />
-}
 
 /** Text field that saves on blur. */
 function SettingInput({ value, onSave, placeholder, type = 'text' }: { value: string; onSave: (v: string) => void; placeholder?: string; type?: string }) {
@@ -69,6 +62,7 @@ export function SettingsView({ snap, save }: { snap: AdminSnapshot; save: Save }
   const client = s.court.role === 'client'
   const [exporting, setExporting] = useState(false)
   const [exportMsg, setExportMsg] = useState<string | null>(null)
+  const [posterError, setPosterError] = useState<string | null>(null)
 
   const doExport = async () => {
     setExporting(true)
@@ -178,10 +172,22 @@ export function SettingsView({ snap, save }: { snap: AdminSnapshot; save: Save }
           )}
           {snap.online.publicUrl && (
             <div className="flex items-center gap-4">
-              <Qr text={snap.online.publicUrl} />
+              <Qr text={snap.online.publicUrl} size={160} className="rounded-xl" />
               <div className="flex-1">
                 <p className="mb-2 text-sm text-muted">Spectators scan this or open:</p>
                 <Copyable text={snap.online.publicUrl} />
+                <p className="mt-2 text-xs text-muted">The TV shows this QR code too: large between matches, small in the corner during a match.</p>
+                <button
+                  onClick={async () => {
+                    const r = await window.kendoAdmin.exportPoster()
+                    if (r.ok) void window.kendoAdmin.openFolder(r.folder)
+                    else setPosterError(r.error)
+                  }}
+                  className="mt-3 rounded-lg bg-surface-2 px-4 py-2 text-sm font-bold hover:bg-neutral-700"
+                >
+                  Poster with QR code (PDF)…
+                </button>
+                {posterError && <p className="mt-1 text-sm text-red-400">{posterError}</p>}
               </div>
             </div>
           )}

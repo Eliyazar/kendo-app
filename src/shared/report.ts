@@ -233,3 +233,26 @@ export function resultsCsv(t: Tournament): string {
   // BOM so Excel opens UTF-8 (Cyrillic names) correctly.
   return '﻿' + [header, ...rows].map((row) => row.map(csvCell).join(',')).join('\r\n') + '\r\n'
 }
+
+/** A4 poster for the entrance and the walls: QR code, link and tournament code of the online results. */
+export function posterHtml(competitionName: string, date: string, url: string, qrSvg: string): string {
+  const code = url.split('/t/')[1] ?? ''
+  const site = url.split('/t/')[0] ?? url
+  return `<!doctype html><html><head><meta charset="utf-8"><style>
+@page { size: A4; margin: 0 } html, body { margin: 0 } body { font-family: 'Segoe UI', Arial, sans-serif; color: #0b0d12 }
+.page { height: 297mm; box-sizing: border-box; padding: 18mm 16mm; display: flex; flex-direction: column; align-items: center; text-align: center }
+.top { font-size: 13pt; letter-spacing: 0.3em; text-transform: uppercase; color: #9e1626; font-weight: 700 }
+h1 { font-size: 26pt; margin: 4mm 0 1mm } .date { font-size: 13pt; color: #555 }
+.big { font-size: 46pt; font-weight: 800; margin: 12mm 0 2mm; letter-spacing: 0.02em } .bg { font-size: 22pt; color: #333 }
+.qr { width: 120mm; height: 120mm; margin: 10mm 0 } .qr svg { width: 100%; height: 100% }
+.how { font-size: 15pt } .url { font-size: 13pt; margin-top: 6mm; word-break: break-all; color: #333 }
+.code { margin-top: 4mm; font-size: 15pt } .code b { font-size: 26pt; letter-spacing: 0.15em; font-family: Consolas, monospace }
+</style></head><body><div class="page">
+<div class="top">Kendo</div><h1>${esc(competitionName)}</h1><div class="date">${esc(longDate(date))}</div>
+<div class="big">LIVE RESULTS</div><div class="bg">Резултати на живо</div>
+<div class="qr">${qrSvg}</div>
+<div class="how">Scan with your phone camera · Сканирайте с камерата на телефона</div>
+<div class="url">${esc(site)}</div>
+<div class="code">Tournament code · Код на турнира: <b>${esc(code)}</b></div>
+</div></body></html>`
+}

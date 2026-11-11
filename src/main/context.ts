@@ -72,6 +72,7 @@ export class AppContext {
       getState: () => this.getState(),
       dispatchFromCourt: (input, courtId) => this.dispatchFromCourt(input, courtId),
       joinCode: () => this.settings.get().court.joinCode,
+      onlineUrl: () => this.publisher.getStatus().publicUrl,
       rendererDir: paths.rendererDir,
       devUrl: paths.devUrl
     })
@@ -172,7 +173,8 @@ export class AppContext {
   }
 
   publicView(): PublicView {
-    return toPublicView(this.getState(), this.courtId() ?? undefined)
+    const onlineUrl = this.isClient ? this.client.onlineUrl : this.publisher.getStatus().publicUrl
+    return { ...toPublicView(this.getState(), this.courtId() ?? undefined), onlineUrl }
   }
 
   snapshot(): AdminSnapshot {

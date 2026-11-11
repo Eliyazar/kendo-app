@@ -2,8 +2,16 @@ import { useEffect, useRef, useState } from 'react'
 import type { PubCategory, PublishedSnapshot } from '../../src/contract'
 import { fetchSnapshot } from './api'
 
-export const POLL_MS = 3000
-export const STALE_AFTER_MS = 30_000
+/** While a match is on a court. Free Cloudflare plan: 100,000 requests a day, so phones must not poll fast. */
+export const POLL_LIVE_MS = 15_000
+/** Between matches, before the start and after the end. */
+export const POLL_IDLE_MS = 60_000
+export const STALE_AFTER_MS = 150_000
+
+const pollDelay = (s: PublishedSnapshot | null, ok: boolean): number => {
+  if (!ok) return 20_000
+  return s?.courts.some((c) => c.view.match) ? POLL_LIVE_MS : POLL_IDLE_MS
+}
 
 export interface LiveState {
   snapshot: PublishedSnapshot | null
@@ -15,7 +23,7 @@ export interface LiveState {
   loaded: boolean
 }
 
-/** Polls the snapshot every 3 s while the page is visible (If-None-Match keeps unchanged polls tiny). */
+/** Polls the snapshot every 15 s during matches (60 s otherwise) while the page is visible. */
 export function useSnapshot(slug: string): LiveState {
   const [state, setState] = useState<LiveState>({ snapshot: null, lastOkAt: null, failing: false, notFound: false, loaded: false })
   const etag = useRef<string | null>(null)
@@ -26,9 +34,10 @@ export function useSnapshot(slug: string): LiveState {
     let ctrl: AbortController | undefined
     etag.current = null
 
-    const schedule = () => {
+    let last: PublishedSnapshot | null = null
+    const schedule = (ok: boolean) => {
       window.clearTimeout(timer)
-      if (!stopped && document.visibilityState === 'visible') timer = window.setTimeout(tick, POLL_MS)
+      if (!stopped && document.visibilityState === 'visible') timer = window.setTimeout(tick, pollDelay(last, ok))
     }
 
     async function tick() {
@@ -41,6 +50,7 @@ export function useSnapshot(slug: string): LiveState {
       const now = Date.now()
       if (res.kind === 'ok') {
         etag.current = res.etag
+        last = res.snapshot
         setState({ snapshot: res.snapshot, lastOkAt: now, failing: false, notFound: false, loaded: true })
       } else if (res.kind === 'same') {
         setState((s) => ({ ...s, lastOkAt: now, failing: false, notFound: false, loaded: true }))
@@ -50,7 +60,7 @@ export function useSnapshot(slug: string): LiveState {
       } else {
         setState((s) => ({ ...s, failing: true, loaded: true }))
       }
-      schedule()
+      schedule(res.kind !== 'error' && res.kind !== 'missing')
     }
 
     const onVisibility = () => {

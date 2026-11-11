@@ -8,6 +8,7 @@ const bridge: AdminBridge = {
   importDraw: () => ipcRenderer.invoke(IPC.adminImportDraw),
   setSettings: (patch) => ipcRenderer.invoke(IPC.adminSetSettings, patch),
   exportResults: () => ipcRenderer.invoke(IPC.adminExport),
+  exportPoster: () => ipcRenderer.invoke(IPC.adminExportPoster),
   openFolder: (folder) => ipcRenderer.invoke(IPC.adminOpenFolder, folder),
   onState: (listener) => {
     const handler = (_e: IpcRendererEvent, snapshot: AdminSnapshot): void => listener(snapshot)

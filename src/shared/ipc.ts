@@ -25,6 +25,8 @@ export const IPC = {
   adminSetSettings: 'admin:set-settings',
   /** invoke, admin -> main: write results, PDFs and diplomas to a folder. */
   adminExport: 'admin:export',
+  /** invoke, admin -> main: save the A4 live-results poster. */
+  adminExportPoster: 'admin:export-poster',
   /** invoke, admin -> main: open a folder in the file manager. */
   adminOpenFolder: 'admin:open-folder',
   /** send, main -> admin: new AdminSnapshot. */
@@ -205,6 +207,7 @@ export interface AdminBridge {
   importDraw(): Promise<DrawImportResult | null>
   setSettings(patch: unknown): Promise<DispatchResult>
   exportResults(): Promise<ExportResult>
+  exportPoster(): Promise<ExportResult>
   openFolder(path: string): Promise<void>
   onState(listener: (snapshot: AdminSnapshot) => void): Unsubscribe
 }

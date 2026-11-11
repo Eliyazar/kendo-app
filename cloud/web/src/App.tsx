@@ -107,7 +107,7 @@ function Tournament({ slug }: { slug: string }) {
     body = live.notFound ? (
       <Empty>
         <p className="display text-xl text-ink">Tournament not found</p>
-        <p className="mt-2">There are no results for the code "{slug}" yet. Check the code, or wait: this page keeps looking every few seconds.</p>
+        <p className="mt-2">There are no results for the code "{slug}" yet. Check the code, or wait: this page looks again every 20 seconds.</p>
         <a href="/" className="mt-4 inline-block font-semibold text-amber">
           Enter another code
         </a>
