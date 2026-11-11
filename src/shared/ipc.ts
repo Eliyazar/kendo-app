@@ -25,6 +25,10 @@ export const IPC = {
   adminSetSettings: 'admin:set-settings',
   /** invoke, admin -> main: write results, PDFs and diplomas to a folder. */
   adminExport: 'admin:export',
+  /** invoke, admin -> main: choose the diploma design (PDF) or font and copy it into the app's data folder. */
+  adminDiplomaFile: 'admin:diploma-file',
+  /** invoke, admin -> main: write diploma-test.pdf with sample names. */
+  adminDiplomaTest: 'admin:diploma-test',
   /** invoke, admin -> main: save group-sheets.pdf. */
   adminExportSheets: 'admin:export-sheets',
   /** invoke, admin -> main: write a backup now. */
@@ -212,6 +216,8 @@ export interface AdminSnapshot {
   devMode: boolean
   /** Same projection the public screen shows, for the live preview. */
   publicView: PublicView
+  /** Diplomas: the organiser's PDF design is set, and the font file used (null = none found). */
+  diploma: { template: boolean; font: string | null }
   /** Automatic backups (host). */
   backup: { folder: string; lastAt: number | null; error: string | null }
 }
@@ -235,6 +241,8 @@ export interface AdminBridge {
   setSettings(patch: unknown): Promise<DispatchResult>
   exportResults(): Promise<ExportResult>
   exportPoster(): Promise<ExportResult>
+  chooseDiplomaFile(kind: 'template' | 'font'): Promise<DispatchResult | null>
+  diplomaTest(): Promise<ExportResult>
   exportGroupSheets(): Promise<ExportResult>
   backupNow(): Promise<ExportResult>
   restoreBackup(): Promise<DispatchResult | null>

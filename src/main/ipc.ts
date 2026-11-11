@@ -1,11 +1,14 @@
 // Main-process side of the IPC bridge.
 // Only the Admin window may change state; the Public window is read-only.
 
-import { BrowserWindow, dialog, ipcMain, shell, type IpcMainInvokeEvent } from 'electron'
+import fs from 'node:fs/promises'
+import path from 'node:path'
+import { app, BrowserWindow, dialog, ipcMain, shell, type IpcMainInvokeEvent } from 'electron'
 import { ADMIN_ACTION_TYPES, IPC, type AdminAction, type AdminSnapshot, type DispatchResult, type DrawImportResult, type ExportResult, type ImportResult } from '@shared/ipc'
 import type { PublicView } from '@shared/public-view'
 import type { AppContext } from './context'
-import { exportGroupSheets, exportPoster, exportResults } from './export'
+import { TEMPLATE_FILE } from './diploma-pdf'
+import { exportDiplomaTest, exportGroupSheets, exportPoster, exportResults } from './export'
 import { importDraw, importParticipants } from './import'
 import { mergeSettings } from './settings'
 
@@ -113,6 +116,37 @@ export function registerIpc(ctx: AppContext, windows: WindowRefs): void {
   })
 
   ipcMain.handle(IPC.adminExportSheets, (e): Promise<ExportResult> | ExportResult => (fromAdmin(e) ? exportGroupSheets(ctx.getState()) : { ok: false, error: 'Not allowed.' }))
+  ipcMain.handle(IPC.adminDiplomaFile, async (e, kind: unknown): Promise<DispatchResult | null> => {
+    if (!fromAdmin(e) || (kind !== 'template' && kind !== 'font')) return { ok: false, error: 'Not allowed.' }
+    const parent = BrowserWindow.fromWebContents(e.sender)
+    const options = {
+      title: kind === 'template' ? 'Choose the diploma design (PDF)' : 'Choose the diploma font',
+      properties: ['openFile' as const],
+      filters: kind === 'template' ? [{ name: 'PDF', extensions: ['pdf'] }] : [{ name: 'Font', extensions: ['ttf', 'otf'] }]
+    }
+    const res = parent ? await dialog.showOpenDialog(parent, options) : await dialog.showOpenDialog(options)
+    const file = res.filePaths[0]
+    if (res.canceled || !file) return null
+    const dir = app.getPath('userData')
+    try {
+      if (kind === 'template') {
+        const { PDFDocument } = await import('pdf-lib')
+        const bytes = await fs.readFile(file)
+        if ((await PDFDocument.load(bytes)).getPageCount() < 1) return { ok: false, error: 'That PDF has no pages.' }
+        await fs.writeFile(path.join(dir, TEMPLATE_FILE), bytes)
+      } else {
+        const ext = path.extname(file).toLowerCase() === '.otf' ? '.otf' : '.ttf'
+        for (const old of ['diploma-font.ttf', 'diploma-font.otf']) await fs.unlink(path.join(dir, old)).catch(() => undefined)
+        await fs.copyFile(file, path.join(dir, `diploma-font${ext}`))
+      }
+    } catch (err) {
+      return { ok: false, error: `Could not use that file: ${err instanceof Error ? err.message : String(err)}` }
+    }
+    await ctx.refreshDiploma()
+    ctx.broadcast()
+    return { ok: true }
+  })
+  ipcMain.handle(IPC.adminDiplomaTest, (e): Promise<ExportResult> | ExportResult => (fromAdmin(e) ? exportDiplomaTest() : { ok: false, error: 'Not allowed.' }))
   ipcMain.handle(IPC.adminBackupNow, async (e): Promise<ExportResult> => {
     if (!fromAdmin(e)) return { ok: false, error: 'Not allowed.' }
     const r = await ctx.backups.run(true)

@@ -273,9 +273,54 @@ export function SettingsView({ snap, save }: { snap: AdminSnapshot; save: Save }
           Group sheets to print (PDF)…
         </button>
         {exportMsg && <p className="text-sm text-muted">{exportMsg}</p>}
-        <p className="text-xs text-muted">
-          Custom diploma: put your design as <code>diploma-template.png</code> (A4 landscape) into the app data folder; names, place and country are printed on it.
-        </p>
+        <div className="mt-2 rounded-xl border border-line p-3">
+          <h4 className="text-sm font-bold">Diploma design</h4>
+          <p className="mt-1 text-sm text-muted">
+            {snap.diploma.template ? (
+              <>
+                <span className="text-ok">✓ Your PDF design</span> — name (with the team in brackets), place and category are written on its three lines. One <code>diplomas.pdf</code> per category.
+              </>
+            ) : (
+              'Standard design. Choose your PDF to use it instead.'
+            )}
+          </p>
+          <p className="mt-1 text-sm text-muted">
+            Font:{' '}
+            {snap.diploma.font ? <span className="text-ok">✓ {snap.diploma.font}</span> : <span className="text-amber-300">not found — Courier is used. Choose the font file (e.g. Lumios Typewriter).</span>}
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button
+              onClick={async () => {
+                const r = await window.kendoAdmin.chooseDiplomaFile('template')
+                if (r && !r.ok) setExportMsg(r.error)
+              }}
+              className="rounded-lg bg-surface-2 px-3 py-2 text-sm font-bold hover:bg-neutral-700"
+            >
+              Choose design (PDF)…
+            </button>
+            <button
+              onClick={async () => {
+                const r = await window.kendoAdmin.chooseDiplomaFile('font')
+                if (r && !r.ok) setExportMsg(r.error)
+              }}
+              className="rounded-lg bg-surface-2 px-3 py-2 text-sm font-bold hover:bg-neutral-700"
+            >
+              Choose font (TTF/OTF)…
+            </button>
+            <button
+              disabled={!snap.diploma.template}
+              onClick={async () => {
+                const r = await window.kendoAdmin.diplomaTest()
+                if (r.ok) void window.kendoAdmin.openFolder(r.folder)
+                else setExportMsg(r.error)
+              }}
+              className="rounded-lg bg-surface-2 px-3 py-2 text-sm font-bold hover:bg-neutral-700 disabled:opacity-30"
+              title="diploma-test.pdf with three sample names, to check the design before the tournament"
+            >
+              Test diploma (PDF)…
+            </button>
+          </div>
+        </div>
       </Card>
     </div>
   )

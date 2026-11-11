@@ -55,7 +55,9 @@ When the groups are made by someone else in Excel, use **Setup → Import draw f
    - `diplomas/`: one PDF each for 1st, 2nd and both semi-final losers (3rd); in team mode, one for every team member.
    - `captain-pins.pdf` (team mode).
 
-   **Settings → Export results now** does the same at any time. For a custom diploma design, put `diploma-template.png` (A4 landscape) into the app's data folder; the text is printed on it.
+   **Settings → Export results now** does the same at any time.
+
+   **Your own diploma design**: *Settings → Results & diplomas → Choose design (PDF)…* and *Choose font (TTF/OTF)…* (an installed Lumios Typewriter is found by itself). The name (team members: `Name (Team)`), the place and the category are written on the design's three lines, sized to fit; each category gets one `diplomas.pdf`. **Test diploma (PDF)…** shows three samples. The line positions are set in `src/main/diploma-pdf.ts` (`LAYOUT`) for the Ruse Cup design. On every laptop that makes diplomas, choose the design and font once (they are not part of the app or the repository).
 6. **Close competition** archives it to `archive/` in the data folder before starting a new one.
 
 ### Changing a running tournament (Participants tab, match order)

@@ -9,6 +9,7 @@ import path from 'node:path'
 import { app, BrowserWindow } from 'electron'
 import type { ExportResult } from '@shared/ipc'
 import QRCode from 'qrcode'
+import { diplomasOnTemplate, hasTemplate } from './diploma-pdf'
 import { diplomaHtml, diplomas, groupSheetsHtml, pinSlipsHtml, posterHtml, reportHtml, resultsCsv } from '@shared/report'
 import type { AppState, Id } from '@shared/types'
 
@@ -33,6 +34,26 @@ async function diplomaBackground(): Promise<string | undefined> {
     }
   }
   return undefined
+}
+
+/** diploma-test.pdf: three sample diplomas (individual, team, long names) to check the design and font. */
+export async function exportDiplomaTest(): Promise<ExportResult> {
+  const dataDir = app.getPath('userData')
+  if (!(await hasTemplate(dataDir))) return { ok: false, error: 'Choose the diploma design (PDF) first.' }
+  try {
+    const folder = documentsBase()
+    await fs.mkdir(folder, { recursive: true })
+    const sample = (place: 1 | 2 | 3, name: string, category: string, team?: string) => ({ place, name, country: 'BUL', dojo: '', tournament: 'Test', category, date: '2026-01-01', ...(team ? { team } : {}) })
+    const bytes = await diplomasOnTemplate(dataDir, [
+      sample(1, 'Desislava Kasnakova', 'Senior female individual'),
+      sample(2, 'Ivan Petrov', 'Senior Teams', 'Ruse Cup'),
+      sample(3, 'Andrey Atanaskovski-Krastevski', 'Children individual (under 12 years old)', 'North Macedonia')
+    ], 'Test')
+    await fs.writeFile(path.join(folder, 'diploma-test.pdf'), bytes)
+    return { ok: true, folder, files: 1 }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) }
+  }
 }
 
 /** Export every category, or only `categoryId`. */
@@ -91,16 +112,24 @@ export async function exportResults(state: AppState, onlineUrl: string | null = 
   try {
     let files = 0
     const background = await diplomaBackground()
+    const designed = await hasTemplate(app.getPath('userData'))
     for (const t of categories) {
       const dir = single ? folder : path.join(folder, safe(t.name))
-      await fs.mkdir(path.join(dir, 'diplomas'), { recursive: true })
+      await fs.mkdir(designed ? dir : path.join(dir, 'diplomas'), { recursive: true })
       await fs.writeFile(path.join(dir, 'results.csv'), resultsCsv(t), 'utf8')
       await fs.writeFile(path.join(dir, 'results.pdf'), await htmlToPdf(win, reportHtml(t, comp.name), false))
       files += 2
-      for (const d of diplomas(t, comp.name)) {
-        const name = safe(`${d.place} - ${d.name}${d.team ? ` (${d.team})` : ''}`)
-        await fs.writeFile(path.join(dir, 'diplomas', `${name}.pdf`), await htmlToPdf(win, diplomaHtml(d, background), true))
+      const list = diplomas(t, comp.name)
+      if (designed && list.length) {
+        // The organiser's design: all diplomas of the category in one PDF, ready to print.
+        await fs.writeFile(path.join(dir, 'diplomas.pdf'), await diplomasOnTemplate(app.getPath('userData'), list, t.name))
         files++
+      } else {
+        for (const d of list) {
+          const name = safe(`${d.place} - ${d.name}${d.team ? ` (${d.team})` : ''}`)
+          await fs.writeFile(path.join(dir, 'diplomas', `${name}.pdf`), await htmlToPdf(win, diplomaHtml(d, background), true))
+          files++
+        }
       }
     }
     const teamCategories = categories.filter((t) => t.mode === 'team')

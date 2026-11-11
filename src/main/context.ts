@@ -4,13 +4,14 @@
 
 import { randomBytes } from 'node:crypto'
 import path from 'node:path'
-import type { BrowserWindow } from 'electron'
+import { app, type BrowserWindow } from 'electron'
 import { IPC, type AdminAction, type AdminSnapshot, type DispatchResult, type Notice } from '@shared/ipc'
 import { podiumView } from '@shared/published'
 import { toPublicView, type PublicView } from '@shared/public-view'
 import type { AppState } from '@shared/types'
 import { Backups, readBackup } from './backup'
 import { CourtClient } from './court-client'
+import { findDiplomaFont, hasTemplate } from './diploma-pdf'
 import { documentsBase, exportResults } from './export'
 import type { StateFile } from './persistence'
 import { Publisher } from './publisher'
@@ -56,6 +57,8 @@ export class AppContext {
   readonly server: LocalServer
   readonly publisher: Publisher
   readonly backups: Backups
+  /** Diploma design and font, refreshed at start and after a change. */
+  diploma: { template: boolean; font: string | null } = { template: false, font: null }
   private notices: Notice[] = []
   /** Phase of each category at the last change, to notice when one finishes. */
   private lastPhases = new Map<string, string>()
@@ -110,6 +113,7 @@ export class AppContext {
       this.publisher.start()
     }
     this.backups.start()
+    await this.refreshDiploma()
     await this.restartServer()
   }
 
@@ -131,6 +135,12 @@ export class AppContext {
       this.publisher.start()
     }
     this.broadcast()
+  }
+
+  async refreshDiploma(): Promise<void> {
+    const dir = app.getPath('userData')
+    const font = await findDiplomaFont(dir)
+    this.diploma = { template: await hasTemplate(dir), font: font ? path.basename(font) : null }
   }
 
   /** A court laptop becomes the host with its own copy of the competition (the host laptop is broken). */
@@ -241,6 +251,7 @@ export class AppContext {
       recovered: !this.isClient && this.store.recovered,
       devMode: this.devMode,
       publicView: this.publicView(),
+      diploma: this.diploma,
       backup: { folder: path.join(documentsBase(), 'backups'), lastAt: this.backups.lastAt, error: this.backups.lastError }
     }
   }
