@@ -113,8 +113,11 @@ describe('pre-drawn categories (draw sheets)', () => {
       const m = t.matches[id]!
       return `${t.players[m.aka.playerId!]!.name}-${t.players[m.shiro.playerId!]!.name}`
     })
-    // Row by row: A1, B1, A2, B2, A3, B3, then B4..B6.
-    expect(order).toEqual(['Ana-Bea', 'Dora-Eva', 'Ana-Cia', 'Dora-Fay', 'Bea-Cia', 'Gia-Fay', 'Gia-Dora', 'Fay-Eva', 'Gia-Eva'])
+    // Default: all of pool A as written, then all of pool B.
+    expect(order).toEqual(['Ana-Bea', 'Ana-Cia', 'Bea-Cia', 'Dora-Eva', 'Dora-Fay', 'Gia-Fay', 'Gia-Dora', 'Fay-Eva', 'Gia-Eva'])
+    // 'alternate': one match of every pool in turn.
+    const alt = cat(create({ name: 'R', date: '2026-11-07', courts: 1, categories: [category('F', { entrants: names.map((name) => ({ name, dojo: '' })), predrawn: female, fightOrder: 'alternate' })] }), 0)
+    expect(alt.matchQueue.map((id) => alt.players[alt.matches[id]!.aka.playerId!]!.name).slice(0, 4)).toEqual(['Ana', 'Dora', 'Ana', 'Dora'])
     expect(t.advancePerPool).toBe(2)
 
     // Pool winners: aka always wins.

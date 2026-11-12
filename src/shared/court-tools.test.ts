@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { onCourt, peopleIn, waitingOn } from './competition'
 import { helpOptions } from './court-tools'
+import { computeStandings, unresolvedTies } from './standings'
 import type { AdminAction, CompetitionSetup } from './ipc'
 import { initialState, reduceApp } from './reducer'
 import type { AppState, Side } from './types'
@@ -136,5 +137,74 @@ describe('match tools', () => {
     expect(shown(s, A)!.aka.playerId).toBe(before.shiro.playerId)
     s = act(s, { type: 'TIMER_START', courtId: A })
     expect(() => tryAct(s, { type: 'SWAP_SIDES', courtId: A })).toThrow()
+  })
+})
+
+describe('flexible pools', () => {
+  const trio = () =>
+    create({
+      name: 'Cup',
+      date: '2026-11-07',
+      courts: 1,
+      categories: [
+        category('U12', people(['Ana', 'Bea', 'Cia']), {
+          predrawn: { pools: [{ name: 'A', entrants: ['Ana', 'Bea', 'Cia'], matches: [['Ana', 'Bea'], ['Bea', 'Cia'], ['Ana', 'Cia']] }], bracket: [] }
+        })
+      ]
+    })
+
+  it('a single pool of three: a circular tie on the podium needs a decision', () => {
+    let s = trio()
+    const A = court(s, 0)
+    // Ana beats Bea, Bea beats Cia, Cia beats Ana: all 2-0, a perfect circle.
+    s = win(s, A, 'aka')
+    s = win(s, A, 'aka')
+    s = win(s, A, 'shiro')
+    const t = comp(s).categories[0]!
+    expect(t.bracketPlan?.kind).toBe('none')
+    expect(unresolvedTies(t)).toHaveLength(1)
+    expect(() => tryAct(s, { type: 'LOCK_POOLS', categoryId: t.id })).toThrow(/ties/)
+  })
+
+  it('the table adds a playoff that decides between equal wins, and can delete it before it starts', () => {
+    let s = trio()
+    const A = court(s, 0)
+    const t0 = comp(s).categories[0]!
+    const id = (n: string) => Object.values(t0.players).find((p) => p.name === n)!.id
+    s = win(s, A, 'aka') // Ana beats Bea
+    const oneNil = (side: Side) => {
+      s = act(s, { type: 'ADD_IPPON', side, technique: 'M', courtId: A })
+      s = act(s, { type: 'TIMER_ADJUST', deltaMs: -600_000, courtId: A }) // time is up
+      s = act(s, { type: 'APPROVE_MATCH', courtId: A })
+    }
+    oneNil('aka') // Bea beats Cia 1-0
+    oneNil('shiro') // Cia beats Ana 1-0
+    const pool = comp(s).categories[0]!.pools[0]!
+    // Ana has more ippons than Bea; the table still wants Ana and Bea to fight it out.
+    s = act(s, { type: 'ADD_PLAYOFF', poolId: pool.id, entrantIds: [id('Ana'), id('Bea')] })
+    const extra = shown(s, A)!
+    expect(extra.kind).toBe('tie-breaker')
+    s = act(s, { type: 'REMOVE_MATCH', matchId: extra.id })
+    expect(comp(s).categories[0]!.matches[extra.id]).toBeUndefined()
+    s = act(s, { type: 'ADD_PLAYOFF', poolId: pool.id, entrantIds: [id('Bea'), id('Ana')] })
+    s = act(s, { type: 'ADD_IPPON', side: 'aka', technique: 'M', courtId: A }) // Bea wins the playoff
+    s = act(s, { type: 'APPROVE_MATCH', courtId: A })
+    const t = comp(s).categories[0]!
+    const ranks = computeStandings(t, t.pools[0]!).map((r) => t.players[r.entrantId]!.name)
+    expect(ranks.indexOf('Bea')).toBeLessThan(ranks.indexOf('Ana'))
+    expect(() => tryAct(s, { type: 'REMOVE_MATCH', matchId: t.matchQueue[0]! })).toThrow()
+  })
+
+  it('moves a waiting match up and down; the loaded match follows the order', () => {
+    let s = trio()
+    const A = court(s, 0)
+    const q = comp(s).categories[0]!.matchQueue
+    s = act(s, { type: 'MOVE_IN_QUEUE', matchId: q[2]!, direction: 'up' })
+    expect(comp(s).categories[0]!.matchQueue).toEqual([q[0], q[2], q[1]])
+    s = act(s, { type: 'MOVE_IN_QUEUE', matchId: q[2]!, direction: 'up' })
+    expect(comp(s).categories[0]!.matchQueue).toEqual([q[2], q[0], q[1]])
+    expect(shown(s, A)!.id).toBe(q[2])
+    s = act(s, { type: 'TIMER_START', courtId: A })
+    expect(() => tryAct(s, { type: 'MOVE_IN_QUEUE', matchId: q[2]!, direction: 'down' })).toThrow()
   })
 })

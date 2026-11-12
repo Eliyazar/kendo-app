@@ -28,6 +28,8 @@ export interface TournamentSetup {
   courtIds?: Id[]
   /** Pools, fight order and bracket already decided elsewhere (e.g. a draw sheet). */
   predrawn?: Predrawn
+  /** 'pools' (default): all matches of pool A, then pool B…; 'alternate': one round of every pool in turn. */
+  fightOrder?: FightOrder
 }
 
 /** A pool exactly as drawn: names refer to entrants (individual) or team names (team mode). */
@@ -116,6 +118,8 @@ interface DrawEntrant {
 }
 
 /** Validate untrusted setup input. Returns the cleaned setup or an error message. */
+export type FightOrder = 'pools' | 'alternate'
+
 export function validateSetup(input: unknown): TournamentSetup | string {
   if (typeof input !== 'object' || input === null) return 'Invalid setup.'
   const s = input as Record<string, unknown>
@@ -172,6 +176,7 @@ export function validateSetup(input: unknown): TournamentSetup | string {
     drawSeed
   }
   if (teamSize) setup.teamSize = teamSize
+  if (s['fightOrder'] === 'alternate' || s['fightOrder'] === 'pools') setup.fightOrder = s['fightOrder']
   if (Array.isArray(s['courtIds']) && s['courtIds'].length <= 8 && s['courtIds'].every((x) => typeof x === 'string')) {
     setup.courtIds = s['courtIds'] as string[]
   }
@@ -380,30 +385,21 @@ export function createTournament(setup: TournamentSetup, now: number, courts?: {
         ? { kind: 'none' }
         : { kind: 'auto' }
 
-  if (setup.predrawn) {
-    // Fight order as written: the n-th match of every pool, pool by pool (row by row in the sheet).
-    const rows = Math.max(0, ...setup.predrawn.pools.map((p) => p.matches.length))
-    for (let r = 0; r < rows; r++) {
-      setup.predrawn.pools.forEach((p, i) => {
-        const m = p.matches[r]
-        if (!m) return
-        const sch = createMeeting(t, 'pool', idOf(m[0]), idOf(m[1]), { poolId: pools[i]!.id, courtId: courtFor(t, i) })
-        t = enqueue(sch.t, sch.boutIds)
-      })
-    }
-    return fillCourts(t)
+  // Each pool's matches in its own order: as written in the sheet, or round-robin rounds.
+  const perPool: [Id, Id][][] = setup.predrawn
+    ? setup.predrawn.pools.map((p) => p.matches.map(([a, b]) => [idOf(a), idOf(b)] as [Id, Id]))
+    : pools.map((p) => roundRobin(p.entrantIds).flat())
+  const add = (i: number, [a, b]: [Id, Id]) => {
+    const s = createMeeting(t, 'pool', a, b, { poolId: pools[i]!.id, courtId: courtFor(t, i) })
+    t = enqueue(s.t, s.boutIds)
   }
-
-  // Interleave pools round by round so fighters rest between their matches.
-  const schedules = pools.map((p) => roundRobin(p.entrantIds))
-  const maxRounds = Math.max(0, ...schedules.map((s) => s.length))
-  for (let r = 0; r < maxRounds; r++) {
-    pools.forEach((pool, i) => {
-      for (const [a, b] of schedules[i]![r] ?? []) {
-        const s = createMeeting(t, 'pool', a, b, { poolId: pool.id, courtId: courtFor(t, i) })
-        t = enqueue(s.t, s.boutIds)
-      }
-    })
+  if (setup.fightOrder === 'alternate') {
+    // One match of every pool in turn (fighters rest longer between their matches).
+    const rows = Math.max(0, ...perPool.map((m) => m.length))
+    for (let r = 0; r < rows; r++) perPool.forEach((ms, i) => ms[r] && add(i, ms[r]!))
+  } else {
+    // Default: all matches of pool A, then pool B, and so on.
+    perPool.forEach((ms, i) => ms.forEach((m) => add(i, m)))
   }
   return fillCourts(t)
 }

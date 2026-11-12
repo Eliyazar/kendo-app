@@ -3,6 +3,7 @@
 
 import { onCourt, peopleIn } from './competition'
 import { fillCourts } from './courts'
+import { createMeeting, enqueue } from './encounters'
 import { kiken, opponent, RuleError } from './match-engine'
 import { afterMatchCompleted } from './progress'
 import type { Competition, Id, Match, Side, TeamMatch, Tournament } from './types'
@@ -160,4 +161,83 @@ export function swapSides(t: Tournament, m: Match): Tournament {
   const node = nodeId && bracket ? bracket.nodes[nodeId] : undefined
   if (bracket && node) bracket = { ...bracket, nodes: { ...bracket.nodes, [node.id]: { ...node, akaEntrantId: node.shiroEntrantId, shiroEntrantId: node.akaEntrantId } } }
   return { ...t, matches, teamMatches, ...(bracket ? { bracket } : {}) }
+}
+
+// ---------------------------------------------------------------------------
+// Extra matches and the fight order, by hand
+// ---------------------------------------------------------------------------
+
+/**
+ * The table adds a match between two members of a pool (a playoff when they are level).
+ * It is fought as a tie-breaker (ippon-shobu with encho) and decides between equal wins.
+ */
+export function addPlayoff(t: Tournament, poolId: Id, a: Id, b: Id): Tournament {
+  if (t.phase !== 'pools') throw new RuleError('Extra matches can only be added during the pool phase.')
+  const pool = t.pools.find((p) => p.id === poolId)
+  if (!pool) throw new RuleError('Unknown pool.')
+  if (a === b || !pool.entrantIds.includes(a) || !pool.entrantIds.includes(b)) throw new RuleError(`Choose two different members of ${pool.name}.`)
+  const courtId = Object.values(t.matches).find((m) => m.poolId === poolId)?.courtId ?? t.courts[0]!.id
+  const s = createMeeting(t, 'tie-breaker', a, b, { poolId, courtId })
+  return fillCourts(enqueue(s.t, s.boutIds))
+}
+
+/** Delete an extra match (tie-breaker or playoff) that has not started. Regular pool matches stay. */
+export function removeExtraMatch(t: Tournament, matchId: Id): Tournament {
+  const m = t.matches[matchId]
+  if (!m) throw new RuleError('Unknown match.')
+  if (m.kind !== 'tie-breaker') throw new RuleError('Only an added match (tie-breaker / playoff) can be deleted.')
+  const ids = unitIds(t, m)
+  if (ids.some((id) => started(t.matches[id]!))) throw new RuleError('This match has started.')
+  const matches = { ...t.matches }
+  for (const id of ids) delete matches[id]
+  const teamMatches = { ...t.teamMatches }
+  if (m.teamMatchId) delete teamMatches[m.teamMatchId]
+  const courts = t.courts.map((c) => (c.activeMatchId && ids.includes(c.activeMatchId) ? { ...c, activeMatchId: null } : c))
+  return fillCourts({ ...t, matches, teamMatches, courts, matchQueue: t.matchQueue.filter((id) => !ids.includes(id)) })
+}
+
+/** Units (meetings) not yet under way on the match's court, in fight order. */
+function openUnitsOnCourt(t: Tournament, courtId: Id): Id[] {
+  const keys: Id[] = []
+  for (const id of t.matchQueue) {
+    const m = t.matches[id]
+    if (!m || m.courtId !== courtId || m.status !== 'scheduled') continue
+    const key = unitKey(m)
+    const all = unitIds(t, m).map((x) => t.matches[x]!)
+    if (all.some(started) || keys.includes(key)) continue
+    keys.push(key)
+  }
+  return keys
+}
+
+/** Move a meeting one place earlier or later among this court's waiting meetings. */
+export function moveInQueue(t: Tournament, matchId: Id, direction: 'up' | 'down'): Tournament {
+  const m = t.matches[matchId]
+  if (!m) throw new RuleError('Unknown match.')
+  const units = openUnitsOnCourt(t, m.courtId)
+  const i = units.indexOf(unitKey(m))
+  if (i < 0) throw new RuleError('Only matches that have not started can be moved.')
+  const j = direction === 'up' ? i - 1 : i + 1
+  if (j < 0 || j >= units.length) return t
+  const a = units[i]!
+  const b = units[j]!
+  // Group the whole fight order by meeting, swap the two meetings, flatten again.
+  const groups: { key: Id; ids: Id[] }[] = []
+  for (const id of t.matchQueue) {
+    const x = t.matches[id]
+    const key = x ? unitKey(x) : id
+    const g = groups.find((y) => y.key === key)
+    if (g) g.ids.push(id)
+    else groups.push({ key, ids: [id] })
+  }
+  const ga = groups.findIndex((g) => g.key === a)
+  const gb = groups.findIndex((g) => g.key === b)
+  ;[groups[ga], groups[gb]] = [groups[gb]!, groups[ga]!]
+  return fillCourts({ ...t, matchQueue: groups.flatMap((g) => g.ids) })
+}
+
+export const canMove = (t: Tournament, m: Match): { up: boolean; down: boolean } => {
+  const units = openUnitsOnCourt(t, m.courtId)
+  const i = units.indexOf(unitKey(m))
+  return { up: i > 0, down: i >= 0 && i < units.length - 1 }
 }

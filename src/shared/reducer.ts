@@ -6,7 +6,7 @@
 
 import { buildBracket } from './bracket'
 import { arrangeCourts, categoryById, categoryOwning, fightingElsewhere, onCourt, withCategory } from './competition'
-import { kikenOnCourt, postpone, swapSides, takePool } from './court-tools'
+import { addPlayoff, kikenOnCourt, moveInQueue, postpone, removeExtraMatch, swapSides, takePool } from './court-tools'
 import { activeMatchOn, courtOf, makeCourts, withCourt } from './courts'
 import { createDemoSetup } from './demo'
 import {
@@ -191,6 +191,15 @@ export function reduceCategory(t: Tournament, action: CategoryAction, now: numbe
 
     case 'EDIT_RESULT':
       return editResult(t, action.matchId, cleanEntries(action.entries), now)
+
+    case 'ADD_PLAYOFF':
+      return addPlayoff(t, action.poolId, action.entrantIds[0]!, action.entrantIds[1]!)
+
+    case 'REMOVE_MATCH':
+      return removeExtraMatch(t, action.matchId)
+
+    case 'MOVE_IN_QUEUE':
+      return moveInQueue(t, action.matchId, action.direction)
 
     case 'MOVE_MATCH':
       return moveToCourt(t, action.matchId, action.courtId)

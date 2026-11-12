@@ -112,6 +112,13 @@ export function DrawImportPanel({ loaded, send, onCancel }: { loaded: Loaded; se
                     onChange={(e) => patch(i, { poolMatchMinutes: Number(e.target.value), bracketMatchMinutes: Number(e.target.value) })}
                   />
                 </label>
+                <label className="flex items-center gap-1" title="In which order the pool matches are fought">
+                  <span className="text-white/50">Order</span>
+                  <select className={small} value={d.fightOrder ?? 'pools'} onChange={(e) => patch(i, { fightOrder: e.target.value as 'pools' | 'alternate' })}>
+                    <option value="pools">Pool by pool (all of A, then B…)</option>
+                    <option value="alternate">Alternate pools (A, B, C, A, B…)</option>
+                  </select>
+                </label>
                 {d.mode === 'team' && (
                   <label className="flex items-center gap-1">
                     <span className="text-white/50">Team size</span>

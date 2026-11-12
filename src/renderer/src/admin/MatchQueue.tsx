@@ -4,8 +4,10 @@ import { useEffect, useRef, useState } from 'react'
 import type { AdminAction } from '@shared/ipc'
 import { describeCompetitor, matchLabel, positionLabel } from '@shared/public-view'
 import { onCourt } from '@shared/competition'
+import { canMove } from '@shared/court-tools'
 import type { Competition, Match, Tournament } from '@shared/types'
 import { EditResultDialog } from './EditResultDialog'
+import { useConfirm } from './useAdmin'
 
 const STATUS_STYLE: Record<Match['status'], string> = {
   scheduled: 'bg-white/10 text-white/60',
@@ -20,6 +22,20 @@ function resultText(m: Match): string | null {
   const r = m.result
   if (!r) return null
   return `${r.akaIppons} – ${r.shiroIppons}${DECISION[r.decision] ?? ''}${r.editedAt ? ' ✎' : ''}`
+}
+
+/** Delete an added match (two clicks). */
+function RemoveExtra({ onConfirm }: { onConfirm: () => void }) {
+  const [armed, confirm] = useConfirm(3000)
+  return (
+    <button
+      onClick={() => confirm(onConfirm)}
+      className={`rounded-md px-1.5 py-0.5 text-xs font-bold ${armed ? 'bg-red-600' : 'bg-neutral-800 hover:bg-neutral-700'}`}
+      title="Delete this added match"
+    >
+      {armed ? 'Delete?' : '✕'}
+    </button>
+  )
 }
 
 export function MatchQueue({
@@ -105,6 +121,21 @@ export function MatchQueue({
                       <div className="mt-1 flex items-center justify-between gap-2">
                         <span className="tabular text-sm text-white/60">{result}</span>
                         <span className="flex gap-1">
+                          {m.status === 'scheduled' && (m.position ?? 0) === 0 && (() => {
+                            const can = canMove(t, m)
+                            const arrow = 'rounded-md bg-neutral-800 px-1.5 py-0.5 text-xs font-bold hover:bg-neutral-700 disabled:opacity-20'
+                            return (
+                              <>
+                                <button disabled={!can.up} onClick={() => void send({ type: 'MOVE_IN_QUEUE', matchId: id, direction: 'up' })} className={arrow} title="Fight earlier">
+                                  ▲
+                                </button>
+                                <button disabled={!can.down} onClick={() => void send({ type: 'MOVE_IN_QUEUE', matchId: id, direction: 'down' })} className={arrow} title="Fight later">
+                                  ▼
+                                </button>
+                              </>
+                            )
+                          })()}
+                          {m.kind === 'tie-breaker' && m.status === 'scheduled' && (m.position ?? 0) === 0 && <RemoveExtra onConfirm={() => void send({ type: 'REMOVE_MATCH', matchId: id })} />}
                           {m.status === 'completed' && (
                             <button onClick={() => setEditing({ t, match: m })} className="rounded-md bg-neutral-800 px-2 py-0.5 text-xs font-semibold hover:bg-neutral-700">
                               Edit

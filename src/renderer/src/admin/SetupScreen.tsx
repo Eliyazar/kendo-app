@@ -181,6 +181,13 @@ export function SetupScreen({ send, devMode }: { send: (a: AdminAction) => Promi
           <Num label="Pool match (min)" value={draft.poolMatchMinutes} min={0.5} max={15} step={0.5} onChange={(n) => set('poolMatchMinutes', n)} />
           <Num label="Bracket match (min)" value={draft.bracketMatchMinutes} min={0.5} max={15} step={0.5} onChange={(n) => set('bracketMatchMinutes', n)} />
           <Num label="Courts (shiai-jo)" value={draft.courts} min={1} max={4} onChange={(n) => set('courts', n)} />
+          <label className="block">
+            <span className={label}>Fight order</span>
+            <select className={field} value={draft.fightOrder ?? 'pools'} onChange={(e) => set('fightOrder', e.target.value as 'pools' | 'alternate')}>
+              <option value="pools">Pool by pool</option>
+              <option value="alternate">Alternate pools</option>
+            </select>
+          </label>
         </div>
 
         <div className="rounded-xl bg-white/5 p-3 text-sm text-white/70">

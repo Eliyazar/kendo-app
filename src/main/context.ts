@@ -42,7 +42,7 @@ const COURT_ACTIONS: ReadonlySet<AdminAction['type']> = new Set([
 ])
 
 /** What a court laptop may do on the host. */
-const ALLOWED_FROM_COURT: ReadonlySet<AdminAction['type']> = new Set([...COURT_ACTIONS, 'SET_LINEUP', 'EDIT_RESULT', 'EDIT_PLAYER'])
+const ALLOWED_FROM_COURT: ReadonlySet<AdminAction['type']> = new Set([...COURT_ACTIONS, 'SET_LINEUP', 'EDIT_RESULT', 'EDIT_PLAYER', 'ADD_PLAYOFF', 'REMOVE_MATCH', 'MOVE_IN_QUEUE'])
 
 const MAX_NOTICES = 8
 

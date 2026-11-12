@@ -1,5 +1,6 @@
 // Pool standings and the Pool Review step before the bracket is generated.
 
+import { useState } from 'react'
 import type { AdminAction } from '@shared/ipc'
 import { describeEntrant } from '@shared/public-view'
 import { computeStandings, poolMatchesComplete, poolsComplete, tieBreakPending, unresolvedTies } from '@shared/standings'
@@ -11,7 +12,60 @@ function poolProgress(t: Tournament, pool: Pool): [number, number] {
   return [ms.filter((m) => m.status === 'completed').length, ms.length]
 }
 
-function PoolTable({ t, pool, review }: { t: Tournament; pool: Pool; review: boolean }) {
+/** The table adds a match between two members of this pool (playoff). */
+function AddMatch({ t, pool, send }: { t: Tournament; pool: Pool; send: (a: AdminAction) => void }) {
+  const [open, setOpen] = useState(false)
+  const [a, setA] = useState('')
+  const [b, setB] = useState('')
+  const name = (id: string) => describeEntrant(t, id).name
+  if (t.phase !== 'pools') return null
+  if (!open) {
+    return (
+      <button onClick={() => setOpen(true)} className="w-full border-t border-white/10 px-4 py-2 text-left text-sm font-semibold text-white/50 hover:bg-white/5 hover:text-white">
+        + Add a match (playoff)
+      </button>
+    )
+  }
+  const select = (v: string, set: (v: string) => void) => (
+    <select value={v} onChange={(e) => set(e.target.value)} className="min-w-0 flex-1 rounded-md border border-white/10 bg-neutral-800 px-2 py-1 text-sm">
+      <option value="">—</option>
+      {pool.entrantIds.map((id) => (
+        <option key={id} value={id}>
+          {name(id)}
+        </option>
+      ))}
+    </select>
+  )
+  return (
+    <div className="border-t border-white/10 px-4 py-3">
+      <p className="mb-2 text-xs text-white/50">Ippon-shobu with encho. Its winner ranks above the loser when they have the same wins. It goes to the end of the match order (move it with ▲▼).</p>
+      <div className="flex items-center gap-2">
+        {select(a, setA)}
+        <span className="text-xs text-white/40">vs</span>
+        {select(b, setB)}
+      </div>
+      <div className="mt-2 flex justify-end gap-2">
+        <button onClick={() => setOpen(false)} className="rounded-md px-3 py-1 text-sm text-white/60 hover:bg-white/10">
+          Cancel
+        </button>
+        <button
+          disabled={!a || !b || a === b}
+          onClick={() => {
+            send({ type: 'ADD_PLAYOFF', poolId: pool.id, entrantIds: [a, b] })
+            setOpen(false)
+            setA('')
+            setB('')
+          }}
+          className="rounded-md bg-emerald-600 px-3 py-1 text-sm font-bold hover:bg-emerald-500 disabled:opacity-30"
+        >
+          Add match
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function PoolTable({ t, pool, review, send }: { t: Tournament; pool: Pool; review: boolean; send: (a: AdminAction) => void }) {
   const rows = computeStandings(t, pool)
   const [done, total] = poolProgress(t, pool)
   const team = t.mode === 'team'
@@ -82,6 +136,7 @@ function PoolTable({ t, pool, review }: { t: Tournament; pool: Pool; review: boo
           })}
         </tbody>
       </table>
+      <AddMatch t={t} pool={pool} send={send} />
     </div>
   )
 }
@@ -106,7 +161,7 @@ export function PoolsView({ t, send }: { t: Tournament; send: (a: AdminAction) =
             {t.phase !== 'pools'
               ? 'Pools are locked. Standings are final.'
               : complete
-                ? `All pool matches are approved. Top ${t.advancePerPool} of each pool qualify. Ranking: wins › ${t.mode === 'team' ? 'bouts won › ' : ''}ippons scored › ippons conceded › head-to-head.`
+                ? `All pool matches are approved. ${t.bracketPlan?.kind === 'none' ? 'The pool ranking gives 1st, 2nd and 3rd place.' : `Top ${t.advancePerPool} of each pool qualify.`} Ranking: wins › ${t.mode === 'team' ? 'bouts won › ' : ''}playoff wins › ippons scored › ippons conceded › head-to-head.`
                 : `${done} of ${poolMatches.length} pool ${t.mode === 'team' ? 'bouts' : 'matches'} approved.`}
           </p>
         </div>
@@ -118,7 +173,7 @@ export function PoolsView({ t, send }: { t: Tournament; send: (a: AdminAction) =
               lockArmed ? 'bg-red-600 hover:bg-red-500' : 'bg-emerald-600 hover:bg-emerald-500'
             }`}
           >
-            {lockArmed ? 'Click again to lock — this cannot be undone' : 'Lock Pools & Generate Brackets'}
+            {lockArmed ? 'Click again to lock — this cannot be undone' : t.bracketPlan?.kind === 'none' ? 'Lock pool — final places' : 'Lock Pools & Generate Brackets'}
           </button>
         )}
       </div>
@@ -154,7 +209,7 @@ export function PoolsView({ t, send }: { t: Tournament; send: (a: AdminAction) =
 
       <div className="grid min-h-0 flex-1 auto-rows-min grid-cols-[repeat(auto-fill,minmax(340px,1fr))] gap-4 overflow-y-auto pb-2">
         {t.pools.map((p) => (
-          <PoolTable key={p.id} t={t} pool={p} review={review} />
+          <PoolTable key={p.id} t={t} pool={p} review={review} send={send} />
         ))}
       </div>
     </div>

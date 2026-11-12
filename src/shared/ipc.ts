@@ -102,6 +102,12 @@ export type AdminAction =
   | { type: 'SET_LINEUP'; teamMatchId: string; teamId: string; lineup: (string | null)[] }
   | { type: 'EDIT_RESULT'; matchId: string; entries: ScoreEntry[] }
   | { type: 'MOVE_MATCH'; matchId: string; courtId: string }
+  /** The table adds a match (playoff) between two members of a pool. */
+  | { type: 'ADD_PLAYOFF'; poolId: string; entrantIds: string[] }
+  /** Delete an added match (tie-breaker / playoff) that has not started. */
+  | { type: 'REMOVE_MATCH'; matchId: string }
+  /** Move a waiting match one place earlier or later on its court. */
+  | { type: 'MOVE_IN_QUEUE'; matchId: string; direction: 'up' | 'down' }
   | { type: 'DEV_LOAD_DEMO' }
 
 export type AdminActionType = AdminAction['type']
@@ -141,6 +147,9 @@ export const ADMIN_ACTION_TYPES: readonly AdminActionType[] = [
   'SET_LINEUP',
   'EDIT_RESULT',
   'MOVE_MATCH',
+  'ADD_PLAYOFF',
+  'REMOVE_MATCH',
+  'MOVE_IN_QUEUE',
   'DEV_LOAD_DEMO'
 ]
 

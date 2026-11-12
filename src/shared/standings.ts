@@ -126,10 +126,11 @@ export function computeStandings(t: Tournament, pool: Pool): Standing[] {
   const keys: ((group: Standing[]) => (s: Standing) => number)[] = [
     () => (s) => s.wins,
     () => (s) => s.boutWins,
+    // An extra match (tie-breaker or a playoff the table added) decides before ippons.
+    () => (s) => s.tieBreakWins,
     () => (s) => s.ipponsScored,
     () => (s) => -s.ipponsConceded,
-    h2h,
-    () => (s) => s.tieBreakWins
+    h2h
   ]
 
   const resolve = (group: Standing[], level: number): Standing[][] => {
@@ -173,6 +174,9 @@ export interface TieGroup {
  * Absolute ties that affect qualification or bracket placement: any tied
  * group that includes a qualifying rank.
  */
+/** Pool places that must be decided: the qualifiers, or 1st–3rd when the pool itself gives the podium. */
+export const placesThatMatter = (t: Tournament): number => (t.bracketPlan?.kind === 'none' ? 3 : t.advancePerPool)
+
 export function unresolvedTies(t: Tournament): TieGroup[] {
   const ties: TieGroup[] = []
   for (const pool of t.pools) {
@@ -180,7 +184,7 @@ export function unresolvedTies(t: Tournament): TieGroup[] {
     if (tieBreakPending(t, pool.id)) continue
     const seen = new Set<Id>()
     for (const s of computeStandings(t, pool)) {
-      if (!s.tiedWith.length || s.rank > t.advancePerPool || seen.has(s.entrantId)) continue
+      if (!s.tiedWith.length || s.rank > placesThatMatter(t) || seen.has(s.entrantId)) continue
       const group = [s.entrantId, ...s.tiedWith]
       group.forEach((id) => seen.add(id))
       ties.push({ poolId: pool.id, entrantIds: group })

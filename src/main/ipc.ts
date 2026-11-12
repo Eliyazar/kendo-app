@@ -28,6 +28,9 @@ const optCourt = (a: Record<string, unknown>): boolean => a['courtId'] === undef
 const STRING_FIELDS: Partial<Record<AdminAction['type'], string[]>> = {
   LOAD_MATCH: ['matchId'],
   TAKE_POOL: ['poolId'],
+  ADD_PLAYOFF: ['poolId'],
+  REMOVE_MATCH: ['matchId'],
+  MOVE_IN_QUEUE: ['matchId'],
   WITHDRAW_ENTRANT: ['entrantId'],
   REMOVE_ENTRANT: ['entrantId'],
   EDIT_PLAYER: ['playerId'],
@@ -54,7 +57,8 @@ const ARRAY_FIELDS: Partial<Record<AdminAction['type'], [string, number][]>> = {
   SET_TEAM_ORDER: [['order', 5]],
   SET_LINEUP: [['lineup', 5]],
   EDIT_RESULT: [['entries', 12]],
-  GENERATE_TIE_BREAKER: [['entrantIds', 16]]
+  GENERATE_TIE_BREAKER: [['entrantIds', 16]],
+  ADD_PLAYOFF: [['entrantIds', 2]]
 }
 
 /** Renderer (or court laptop) input is untrusted: check shape before it reaches the reducer. */
@@ -66,6 +70,8 @@ export function parseAdminAction(input: unknown, allowDev: boolean): AdminAction
   if (type === 'DEV_LOAD_DEMO' && !allowDev) return null
   if (type === 'ADD_IPPON' && !(SIDES.includes(a['side'] as string) && TECHNIQUES.includes(a['technique'] as string))) return null
   if ((type === 'ADD_HANSOKU' || type === 'FUSEN_GACHI' || type === 'SET_REPRESENTATIVE' || type === 'KIKEN') && !SIDES.includes(a['side'] as string)) return null
+  if (type === 'MOVE_IN_QUEUE' && a['direction'] !== 'up' && a['direction'] !== 'down') return null
+  if (type === 'ADD_PLAYOFF' && !(Array.isArray(a['entrantIds']) && a['entrantIds'].length === 2 && a['entrantIds'].every(str))) return null
   if (type === 'SHOW_PODIUM' && a['categoryId'] !== null && !str(a['categoryId'])) return null
   if (type === 'SET_REPRESENTATIVE' && !str(a['playerId'])) return null
   if (type === 'TIMER_ADJUST' && !(Number.isFinite(a['deltaMs']) && Math.abs(a['deltaMs'] as number) <= 30 * 60_000)) return null
