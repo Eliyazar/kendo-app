@@ -193,7 +193,7 @@ export function reduceCategory(t: Tournament, action: CategoryAction, now: numbe
       return editResult(t, action.matchId, cleanEntries(action.entries), now)
 
     case 'ADD_PLAYOFF':
-      return addPlayoff(t, action.poolId, action.entrantIds[0]!, action.entrantIds[1]!)
+      return addPlayoff(t, action.poolId, action.entrantIds[0]!, action.entrantIds[1]!, action.encho !== false)
 
     case 'REMOVE_MATCH':
       return removeExtraMatch(t, action.matchId)

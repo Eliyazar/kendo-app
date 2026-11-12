@@ -17,6 +17,7 @@ function AddMatch({ t, pool, send }: { t: Tournament; pool: Pool; send: (a: Admi
   const [open, setOpen] = useState(false)
   const [a, setA] = useState('')
   const [b, setB] = useState('')
+  const [encho, setEncho] = useState(true)
   const name = (id: string) => describeEntrant(t, id).name
   if (t.phase !== 'pools') return null
   if (!open) {
@@ -38,12 +39,16 @@ function AddMatch({ t, pool, send }: { t: Tournament; pool: Pool; send: (a: Admi
   )
   return (
     <div className="border-t border-white/10 px-4 py-3">
-      <p className="mb-2 text-xs text-white/50">Ippon-shobu with encho. Its winner ranks above the loser when they have the same wins. It goes to the end of the match order (move it with ▲▼).</p>
+      <p className="mb-2 text-xs text-white/50">One point wins. Its winner ranks above the loser when they have the same wins. It goes to the end of the match order (move it with ▲▼).</p>
       <div className="flex items-center gap-2">
         {select(a, setA)}
         <span className="text-xs text-white/40">vs</span>
         {select(b, setB)}
       </div>
+      <label className="mt-2 flex items-center gap-2 text-sm">
+        <input type="checkbox" className="h-4 w-4" checked={encho} onChange={(e) => setEncho(e.target.checked)} />
+        With encho (no point at time-up: extra time until the first point)
+      </label>
       <div className="mt-2 flex justify-end gap-2">
         <button onClick={() => setOpen(false)} className="rounded-md px-3 py-1 text-sm text-white/60 hover:bg-white/10">
           Cancel
@@ -51,7 +56,7 @@ function AddMatch({ t, pool, send }: { t: Tournament; pool: Pool; send: (a: Admi
         <button
           disabled={!a || !b || a === b}
           onClick={() => {
-            send({ type: 'ADD_PLAYOFF', poolId: pool.id, entrantIds: [a, b] })
+            send({ type: 'ADD_PLAYOFF', poolId: pool.id, entrantIds: [a, b], encho })
             setOpen(false)
             setA('')
             setB('')

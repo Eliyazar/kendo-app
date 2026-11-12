@@ -171,14 +171,21 @@ export function swapSides(t: Tournament, m: Match): Tournament {
  * The table adds a match between two members of a pool (a playoff when they are level).
  * It is fought as a tie-breaker (ippon-shobu with encho) and decides between equal wins.
  */
-export function addPlayoff(t: Tournament, poolId: Id, a: Id, b: Id): Tournament {
+export function addPlayoff(t: Tournament, poolId: Id, a: Id, b: Id, encho = true): Tournament {
   if (t.phase !== 'pools') throw new RuleError('Extra matches can only be added during the pool phase.')
   const pool = t.pools.find((p) => p.id === poolId)
   if (!pool) throw new RuleError('Unknown pool.')
   if (a === b || !pool.entrantIds.includes(a) || !pool.entrantIds.includes(b)) throw new RuleError(`Choose two different members of ${pool.name}.`)
   const courtId = Object.values(t.matches).find((m) => m.poolId === poolId)?.courtId ?? t.courts[0]!.id
   const s = createMeeting(t, 'tie-breaker', a, b, { poolId, courtId })
-  return fillCourts(enqueue(s.t, s.boutIds))
+  let next = s.t
+  if (!encho) {
+    // Without encho a draw at time-up stays a draw (hikiwake).
+    const matches = { ...next.matches }
+    for (const id of s.boutIds) matches[id] = { ...matches[id]!, config: { ...matches[id]!.config, enchoOnDraw: false } }
+    next = { ...next, matches }
+  }
+  return fillCourts(enqueue(next, s.boutIds))
 }
 
 /** Delete an extra match (tie-breaker or playoff) that has not started. Regular pool matches stay. */

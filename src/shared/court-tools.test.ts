@@ -186,7 +186,13 @@ describe('flexible pools', () => {
     expect(extra.kind).toBe('tie-breaker')
     s = act(s, { type: 'REMOVE_MATCH', matchId: extra.id })
     expect(comp(s).categories[0]!.matches[extra.id]).toBeUndefined()
+    // Without encho: a draw at time-up stays a draw.
+    s = act(s, { type: 'ADD_PLAYOFF', poolId: pool.id, entrantIds: [id('Ana'), id('Bea')], encho: false })
+    const noEncho = shown(s, A)!
+    expect(noEncho.config.enchoOnDraw).toBe(false)
+    s = act(s, { type: 'REMOVE_MATCH', matchId: noEncho.id })
     s = act(s, { type: 'ADD_PLAYOFF', poolId: pool.id, entrantIds: [id('Bea'), id('Ana')] })
+    expect(shown(s, A)!.config.enchoOnDraw).toBe(true)
     s = act(s, { type: 'ADD_IPPON', side: 'aka', technique: 'M', courtId: A }) // Bea wins the playoff
     s = act(s, { type: 'APPROVE_MATCH', courtId: A })
     const t = comp(s).categories[0]!

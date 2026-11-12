@@ -103,7 +103,7 @@ export type AdminAction =
   | { type: 'EDIT_RESULT'; matchId: string; entries: ScoreEntry[] }
   | { type: 'MOVE_MATCH'; matchId: string; courtId: string }
   /** The table adds a match (playoff) between two members of a pool. */
-  | { type: 'ADD_PLAYOFF'; poolId: string; entrantIds: string[] }
+  | { type: 'ADD_PLAYOFF'; poolId: string; entrantIds: string[]; encho?: boolean }
   /** Delete an added match (tie-breaker / playoff) that has not started. */
   | { type: 'REMOVE_MATCH'; matchId: string }
   /** Move a waiting match one place earlier or later on its court. */

@@ -71,6 +71,7 @@ export function parseAdminAction(input: unknown, allowDev: boolean): AdminAction
   if (type === 'ADD_IPPON' && !(SIDES.includes(a['side'] as string) && TECHNIQUES.includes(a['technique'] as string))) return null
   if ((type === 'ADD_HANSOKU' || type === 'FUSEN_GACHI' || type === 'SET_REPRESENTATIVE' || type === 'KIKEN') && !SIDES.includes(a['side'] as string)) return null
   if (type === 'MOVE_IN_QUEUE' && a['direction'] !== 'up' && a['direction'] !== 'down') return null
+  if (type === 'ADD_PLAYOFF' && a['encho'] !== undefined && typeof a['encho'] !== 'boolean') return null
   if (type === 'ADD_PLAYOFF' && !(Array.isArray(a['entrantIds']) && a['entrantIds'].length === 2 && a['entrantIds'].every(str))) return null
   if (type === 'SHOW_PODIUM' && a['categoryId'] !== null && !str(a['categoryId'])) return null
   if (type === 'SET_REPRESENTATIVE' && !str(a['playerId'])) return null
