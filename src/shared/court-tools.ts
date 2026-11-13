@@ -2,10 +2,10 @@
 // kiken during a match, swap Aka and Shiro before the start.
 
 import { onCourt, peopleIn } from './competition'
-import { buildBracket } from './bracket'
+import { buildBracket, replaceWinner } from './bracket'
 import { fillCourts } from './courts'
 import { parseBracketText, poolLetter } from './setup'
-import { createMeeting, enqueue, setLineup } from './encounters'
+import { createMeeting, enqueue, refreshEncounter, setLineup } from './encounters'
 import { kiken, opponent, RuleError } from './match-engine'
 import { afterMatchCompleted } from './progress'
 import type { Competition, Id, Match, Side, TeamMatch, Tournament } from './types'
@@ -348,4 +348,76 @@ export function setBracket(t: Tournament, text: string): Tournament {
   } catch (err) {
     throw new RuleError(err instanceof Error ? err.message : String(err))
   }
+}
+
+// ---------------------------------------------------------------------------
+// Replay a finished match
+// ---------------------------------------------------------------------------
+
+/** Drop an elimination nobody has started yet and go back to the pool phase. */
+function reopenPools(t: Tournament): Tournament {
+  const bracketIds = Object.values(t.matches).filter((m) => m.kind === 'bracket').map((m) => m.id)
+  if (bracketIds.some((id) => started(t.matches[id]!))) throw new RuleError('The elimination has started; pool matches can no longer be replayed.')
+  const drop = new Set(bracketIds)
+  return {
+    ...t,
+    phase: 'pools',
+    bracket: null,
+    matches: Object.fromEntries(Object.entries(t.matches).filter(([id]) => !drop.has(id))),
+    teamMatches: Object.fromEntries(Object.entries(t.teamMatches).filter(([, tm]) => tm.kind !== 'bracket')),
+    matchQueue: t.matchQueue.filter((id) => !drop.has(id)),
+    courts: t.courts.map((c) => (c.activeMatchId && drop.has(c.activeMatchId) ? { ...c, activeMatchId: null } : c))
+  }
+}
+
+/** A replay is possible: the match is approved and whatever came after it has not started. */
+export function canReplay(t: Tournament, m: Match): boolean {
+  try {
+    replayMatch(t, m.id)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Fight an approved match again (the referees decided it must be repeated): its result is
+ * cleared and it becomes the next match on its court. Pool matches can be replayed while
+ * the elimination has not started; an elimination match while the next round has not started.
+ */
+export function replayMatch(t: Tournament, matchId: Id): Tournament {
+  const m = t.matches[matchId]
+  if (!m || m.status !== 'completed') throw new RuleError('Only an approved match can be replayed.')
+  const tm = m.teamMatchId ? t.teamMatches[m.teamMatchId] : undefined
+  if (tm?.daihyoMatchId && tm.daihyoMatchId !== m.id) throw new RuleError('This encounter went to a daihyo-sen; replay the daihyo-sen instead.')
+  if (m.kind === 'pool' || (m.kind === 'tie-breaker' && m.poolId)) {
+    if (t.phase === 'bracket') t = reopenPools(t)
+    else if (t.phase === 'finished') {
+      if (t.bracketPlan?.kind !== 'none') t = reopenPools(t)
+      else t = { ...t, phase: 'pools' }
+    }
+  } else if (m.kind === 'bracket') {
+    // The winner leaves the next round again (refused if that round has started).
+    const nodeId = tm?.bracketNodeId ?? m.bracketNodeId
+    const node = nodeId ? t.bracket?.nodes[nodeId] : undefined
+    if (node?.winnerEntrantId) {
+      try {
+        t = replaceWinner(t, node.id, null)
+      } catch (err) {
+        throw new RuleError(err instanceof Error ? err.message : String(err))
+      }
+    }
+  }
+  const { result: _r, endReason: _e, enchoFromEvent: _f, ...rest } = t.matches[m.id]!
+  const fresh: Match = { ...rest, status: 'scheduled', events: [], encho: false, timer: { mode: 'countdown', durationMs: m.config.durationMs, elapsedMs: 0, runningSince: null } }
+  let next: Tournament = { ...t, matches: { ...t.matches, [m.id]: fresh } }
+  if (tm) next = refreshEncounter(next, tm.id, m.id).t
+  // Fought next on its court: just before the first match there that has not been fought.
+  const queue = next.matchQueue.filter((id) => id !== m.id)
+  const at = queue.findIndex((id) => {
+    const x = next.matches[id]
+    return x && x.courtId === m.courtId && x.status !== 'completed'
+  })
+  queue.splice(at < 0 ? queue.length : at, 0, m.id)
+  return fillCourts({ ...next, matchQueue: queue })
 }

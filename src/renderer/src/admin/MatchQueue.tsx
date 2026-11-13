@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { AdminAction } from '@shared/ipc'
 import { describeCompetitor, matchLabel, positionLabel } from '@shared/public-view'
 import { onCourt } from '@shared/competition'
-import { canMove } from '@shared/court-tools'
+import { canMove, canReplay } from '@shared/court-tools'
 import type { Competition, Match, Tournament } from '@shared/types'
 import { EditResultDialog } from './EditResultDialog'
 import { useConfirm } from './useAdmin'
@@ -22,6 +22,20 @@ function resultText(m: Match): string | null {
   const r = m.result
   if (!r) return null
   return `${r.akaIppons} – ${r.shiroIppons}${DECISION[r.decision] ?? ''}${r.editedAt ? ' ✎' : ''}`
+}
+
+/** Fight an approved match again (two clicks). */
+function ReplayButton({ onConfirm }: { onConfirm: () => void }) {
+  const [armed, confirm] = useConfirm(3000)
+  return (
+    <button
+      onClick={() => confirm(onConfirm)}
+      className={`rounded-md px-2 py-0.5 text-xs font-semibold ${armed ? 'bg-red-600' : 'bg-neutral-800 hover:bg-neutral-700'}`}
+      title="Fight this match again: its result is deleted and it becomes the next match on its court"
+    >
+      {armed ? 'Replay? Click again' : 'Replay'}
+    </button>
+  )
 }
 
 /** Delete an added match (two clicks). */
@@ -152,6 +166,7 @@ export function MatchQueue({
                             )
                           })()}
                           {m.kind === 'tie-breaker' && m.status === 'scheduled' && (m.position ?? 0) === 0 && <RemoveExtra onConfirm={() => void send({ type: 'REMOVE_MATCH', matchId: id })} />}
+                          {m.status === 'completed' && canReplay(t, m) && <ReplayButton onConfirm={() => void send({ type: 'REPLAY_MATCH', matchId: id })} />}
                           {m.status === 'completed' && (
                             <button onClick={() => setEditing({ t, match: m })} className="rounded-md bg-neutral-800 px-2 py-0.5 text-xs font-semibold hover:bg-neutral-700">
                               Edit

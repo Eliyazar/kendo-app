@@ -383,3 +383,57 @@ describe('a fighter who does not come', () => {
     expect(podium(t).map((p) => [p.place, t.players[p.entrantId]!.name])).toEqual([[1, 'Bea'], [2, 'Ana']])
   })
 })
+
+describe('replay a match', () => {
+  const auto = (setup: CompetitionSetup) => reduceApp(initialState(), { type: 'CREATE_COMPETITION', setup }, (clock += 1000)).state
+  const pool = (n: string, e: string[]) => ({ name: n, entrants: e, matches: [[e[0]!, e[1]!], [e[1]!, e[2]!], [e[0]!, e[2]!]] as [string, string][] })
+
+  it('a finished single-group category: the replayed match is next, and the podium follows the new result', () => {
+    let s = auto({ name: 'Cup', date: '2026-11-07', courts: 1, categories: [category('Trio', people(['Ana', 'Bea', 'Cia']), { predrawn: { pools: [pool('A', ['Ana', 'Bea', 'Cia'])], bracket: [] } })] })
+    const A = court(s, 0)
+    for (let i = 0; i < 3; i++) s = win(s, A, 'aka') // Ana 2 wins, Bea 1, Cia 0
+    let t = comp(s).categories[0]!
+    expect(t.phase).toBe('finished')
+    const first = t.matchQueue[0]! // Ana v Bea
+    s = act(s, { type: 'REPLAY_MATCH', matchId: first })
+    t = comp(s).categories[0]!
+    expect(t.phase).toBe('pools')
+    expect(shown(s, A)!.id).toBe(first)
+    s = win(s, A, 'shiro') // Bea wins the replay
+    t = comp(s).categories[0]!
+    expect(t.phase).toBe('finished')
+    expect(t.matches[first]!.result?.winner).toBe('shiro')
+  })
+
+  it('an elimination match: its winner leaves the next round; refused once that round started', () => {
+    const six = ['A1x', 'A2x', 'A3x', 'B1x', 'B2x', 'B3x']
+    let s = auto({ name: 'Cup', date: '2026-11-07', courts: 1, categories: [category('Jr', people(six), { predrawn: { pools: [pool('A', six.slice(0, 3)), pool('B', six.slice(3))], bracket: [['A1', 'B2'], ['B1', 'A2']] } })] })
+    const A = court(s, 0)
+    for (let i = 0; i < 6; i++) s = win(s, A)
+    expect(comp(s).categories[0]!.phase).toBe('bracket')
+    const semi = shown(s, A)!.id
+    s = win(s, A)
+    const finalNode = () => Object.values(comp(s).categories[0]!.bracket!.nodes).find((n) => !n.next)!
+    expect(finalNode().akaEntrantId).not.toBeNull()
+    s = act(s, { type: 'REPLAY_MATCH', matchId: semi })
+    expect(finalNode().akaEntrantId).toBeNull()
+    expect(shown(s, A)!.id).toBe(semi)
+    s = win(s, A) // semi again
+    s = win(s, A) // other semi
+    s = act(s, { type: 'TIMER_START', courtId: A }) // final starts
+    expect(() => tryAct(s, { type: 'REPLAY_MATCH', matchId: semi })).toThrow()
+  })
+
+  it('a pool match after the bracket was built but not started: back to the pools', () => {
+    const six = ['A1x', 'A2x', 'A3x', 'B1x', 'B2x', 'B3x']
+    let s = auto({ name: 'Cup', date: '2026-11-07', courts: 1, categories: [category('Jr', people(six), { predrawn: { pools: [pool('A', six.slice(0, 3)), pool('B', six.slice(3))], bracket: [['A1', 'B2'], ['B1', 'A2']] } })] })
+    const A = court(s, 0)
+    for (let i = 0; i < 6; i++) s = win(s, A)
+    const last = comp(s).categories[0]!.matchQueue.filter((id) => comp(s).categories[0]!.matches[id]!.kind === 'pool').pop()!
+    s = act(s, { type: 'REPLAY_MATCH', matchId: last })
+    const t = comp(s).categories[0]!
+    expect(t.phase).toBe('pools')
+    expect(t.bracket).toBeNull()
+    expect(shown(s, A)!.id).toBe(last)
+  })
+})

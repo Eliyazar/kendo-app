@@ -114,6 +114,8 @@ export type AdminAction =
   | { type: 'ADD_PLAYOFF'; poolId: string; entrantIds: string[]; encho?: boolean }
   /** Delete an added match (tie-breaker / playoff) that has not started. */
   | { type: 'REMOVE_MATCH'; matchId: string }
+  /** Fight an approved match again: its result is cleared and it is next on its court. */
+  | { type: 'REPLAY_MATCH'; matchId: string }
   /** Move a waiting match one place earlier or later on its court. */
   | { type: 'MOVE_IN_QUEUE'; matchId: string; direction: 'up' | 'down' }
   | { type: 'DEV_LOAD_DEMO' }
@@ -161,6 +163,7 @@ export const ADMIN_ACTION_TYPES: readonly AdminActionType[] = [
   'SET_BRACKET',
   'ADD_PLAYOFF',
   'REMOVE_MATCH',
+  'REPLAY_MATCH',
   'MOVE_IN_QUEUE',
   'DEV_LOAD_DEMO'
 ]

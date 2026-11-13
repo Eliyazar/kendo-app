@@ -82,6 +82,7 @@ When the groups are made by someone else in Excel, use **Setup → Import draw f
 - **Group sheets**: *Settings → Results & diplomas → Group sheets to print* — every group with fighters and fight order (played results filled in).
 - **Remove from group** (pool phase only): deletes the person or team from their pool together with all their pool matches, played ones too, as if they had never been drawn. Use **Withdraw** instead when results against them should stand.
 - **Late entry** (pool phase): joins the smallest pool and gets a match against every member.
+- **Replay** (match order, on an approved match, two clicks): the match is fought again — its result is cleared and it becomes the next match on its court. Pool matches can be replayed until the elimination starts (an unstarted bracket is dropped and rebuilt later); an elimination match until the next round starts.
 - **Edit result** (✎ in the match order) corrects an approved match. Pool results can change until the pools are locked. A bracket result can change who advances only while the next round has not started.
 - **Teams**: rename, add or remove members, set the default order, and set the order for a specific encounter. Each order locks when that encounter's first bout starts. Captains can also send it from their phone (see Online results), and the table can always override it.
 

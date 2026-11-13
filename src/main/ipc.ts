@@ -32,6 +32,7 @@ const STRING_FIELDS: Partial<Record<AdminAction['type'], string[]>> = {
   SET_BRACKET: ['categoryId'],
   ADD_PLAYOFF: ['poolId'],
   REMOVE_MATCH: ['matchId'],
+  REPLAY_MATCH: ['matchId'],
   MOVE_IN_QUEUE: ['matchId'],
   WITHDRAW_ENTRANT: ['entrantId'],
   REMOVE_ENTRANT: ['entrantId'],

@@ -7,7 +7,7 @@
 import { buildBracket } from './bracket'
 import { publicCodeFor } from './published'
 import { arrangeCourts, categoryById, categoryOwning, fightingElsewhere, onCourt, withCategory } from './competition'
-import { addPlayoff, setBracket, kikenOnCourt, moveInQueue, postpone, removeExtraMatch, restartCategory, swapSides, takePool } from './court-tools'
+import { addPlayoff, replayMatch, setBracket, kikenOnCourt, moveInQueue, postpone, removeExtraMatch, restartCategory, swapSides, takePool } from './court-tools'
 import { activeMatchOn, courtOf, fillCourts, makeCourts, withCourt } from './courts'
 import { createDemoSetup } from './demo'
 import {
@@ -204,6 +204,9 @@ export function reduceCategory(t: Tournament, action: CategoryAction, now: numbe
 
     case 'ADD_PLAYOFF':
       return addPlayoff(t, action.poolId, action.entrantIds[0]!, action.entrantIds[1]!, action.encho !== false)
+
+    case 'REPLAY_MATCH':
+      return replayMatch(t, action.matchId)
 
     case 'REMOVE_MATCH':
       return removeExtraMatch(t, action.matchId)
