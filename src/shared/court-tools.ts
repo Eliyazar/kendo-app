@@ -187,7 +187,11 @@ export function addPlayoff(t: Tournament, poolId: Id, a: Id, b: Id, encho = true
     for (const id of s.boutIds) matches[id] = { ...matches[id]!, config: { ...matches[id]!.config, enchoOnDraw: false } }
     next = { ...next, matches }
   }
-  return fillCourts(enqueue(next, s.boutIds))
+  // Fought right after the pool's own matches.
+  const lastOfPool = next.matchQueue.reduce((at, id, i) => (next.matches[id]?.poolId === poolId ? i : at), -1)
+  const queue = [...next.matchQueue]
+  queue.splice(lastOfPool + 1, 0, ...s.boutIds)
+  return fillCourts({ ...next, matchQueue: queue })
 }
 
 /** Delete an extra match (tie-breaker or playoff) that has not started. Regular pool matches stay. */

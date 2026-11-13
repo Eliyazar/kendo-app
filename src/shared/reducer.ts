@@ -8,7 +8,7 @@ import { buildBracket } from './bracket'
 import { publicCodeFor } from './published'
 import { arrangeCourts, categoryById, categoryOwning, fightingElsewhere, onCourt, withCategory } from './competition'
 import { addPlayoff, setBracket, kikenOnCourt, moveInQueue, postpone, removeExtraMatch, restartCategory, swapSides, takePool } from './court-tools'
-import { activeMatchOn, courtOf, makeCourts, withCourt } from './courts'
+import { activeMatchOn, courtOf, fillCourts, makeCourts, withCourt } from './courts'
 import { createDemoSetup } from './demo'
 import {
   addEntrant,
@@ -30,7 +30,7 @@ import type { AdminAction, CompetitionSetup } from './ipc'
 import { reduceMatch, RuleError, type MatchAction } from './match-engine'
 import { afterMatchCompleted } from './progress'
 import { createTournament, roundRobin, SETUP_LIMITS, validateSetup, type TournamentSetup } from './setup'
-import { poolMatchesComplete, poolsComplete, unresolvedTies } from './standings'
+import { poolDone, poolMatchesComplete, poolsComplete, unresolvedTies } from './standings'
 import { SCHEMA_VERSION, type AppState, type Competition, type Match, type Tournament } from './types'
 
 export type AppAction = AdminAction | { type: 'TICK' }
@@ -132,18 +132,24 @@ export function reduceCategory(t: Tournament, action: CategoryAction, now: numbe
 
     case 'GENERATE_TIE_BREAKER': {
       if (t.phase !== 'pools') throw new RuleError('Tie-breakers are only for the pool phase.')
-      if (!poolMatchesComplete(t)) throw new RuleError('Finish all pool matches first.')
+      if (!poolDone(t, action.poolId)) throw new RuleError('Finish the matches of this pool first.')
       const tie = unresolvedTies(t).find(
         (g) => g.poolId === action.poolId && g.entrantIds.length === action.entrantIds.length && action.entrantIds.every((id) => g.entrantIds.includes(id))
       )
       if (!tie) throw new RuleError('There is no such tie to break.')
       const courtId = Object.values(t.matches).find((m) => m.poolId === tie.poolId)?.courtId ?? t.courts[0]!.id
       let next = t
+      const added: string[] = []
       for (const [a, b] of roundRobin(tie.entrantIds).flat()) {
         const s = createMeeting(next, 'tie-breaker', a, b, { poolId: tie.poolId, courtId })
-        next = enqueue(s.t, s.boutIds)
+        next = s.t
+        added.push(...s.boutIds)
       }
-      return next
+      // Fought right after the pool's own matches, before the next pool.
+      const lastOfPool = next.matchQueue.reduce((at, id, i) => (next.matches[id]?.poolId === tie.poolId ? i : at), -1)
+      const queue = [...next.matchQueue]
+      queue.splice(lastOfPool + 1, 0, ...added)
+      return fillCourts({ ...next, matchQueue: queue })
     }
 
     case 'LOCK_POOLS': {
@@ -314,15 +320,16 @@ function advancePools(comp: Competition, now: number): Competition {
   if (comp.manualPoolReview) return comp
   let changed = false
   const categories = comp.categories.map((t) => {
-    if (t.phase !== 'pools' || !poolMatchesComplete(t) || !poolsComplete(t)) return t
+    if (t.phase !== 'pools') return t
     try {
-      const ties = unresolvedTies(t)
-      // Still tied after a tie-breaker (e.g. a circle again): the table decides in Pool Review.
-      const hadTieBreaker = (poolId: string) => Object.values(t.matches).some((m) => m.kind === 'tie-breaker' && m.poolId === poolId)
-      if (ties.some((tie) => hadTieBreaker(tie.poolId))) return t
       let next = t
-      if (ties.length) for (const tie of ties) next = reduceCategory(next, { type: 'GENERATE_TIE_BREAKER', poolId: tie.poolId, entrantIds: tie.entrantIds }, now)
-      else next = reduceCategory(next, { type: 'LOCK_POOLS', categoryId: t.id }, now)
+      // A finished pool with a tie gets its tie-breaker at once (only once: a second circle waits for the table).
+      const hadTieBreaker = (poolId: string) => Object.values(t.matches).some((m) => m.kind === 'tie-breaker' && m.poolId === poolId)
+      for (const tie of unresolvedTies(t)) {
+        if (!hadTieBreaker(tie.poolId)) next = reduceCategory(next, { type: 'GENERATE_TIE_BREAKER', poolId: tie.poolId, entrantIds: tie.entrantIds }, now)
+      }
+      // Everything fought and nothing tied: lock and start the eliminations.
+      if (poolMatchesComplete(next) && poolsComplete(next) && !unresolvedTies(next).length) next = reduceCategory(next, { type: 'LOCK_POOLS', categoryId: t.id }, now)
       changed ||= next !== t
       return next
     } catch {

@@ -341,3 +341,24 @@ describe('changing the elimination during the competition', () => {
     expect(() => tryAct(s, { type: 'SET_BRACKET', categoryId: id, text: 'A1–B1, B2–A2' })).toThrow(/started/)
   })
 })
+
+describe('tie-breakers right after their own pool', () => {
+  it('a tie in pool A is fought before the matches of pool B', () => {
+    const pool = (n: string, e: string[]) => ({ name: n, entrants: e, matches: [[e[0]!, e[1]!], [e[1]!, e[2]!], [e[0]!, e[2]!]] as [string, string][] })
+    const a = ['Ana', 'Bea', 'Cia']
+    const b = ['Dan', 'Eva', 'Fil']
+    let s = reduceApp(initialState(), {
+      type: 'CREATE_COMPETITION',
+      setup: { name: 'Cup', date: '2026-11-07', courts: 1, categories: [category('Two', people([...a, ...b]), { predrawn: { pools: [pool('A', a), pool('B', b)], bracket: [] } })] }
+    }, (clock += 1000)).state
+    const A = court(s, 0)
+    s = win(s, A, 'aka')
+    s = win(s, A, 'aka')
+    s = win(s, A, 'shiro') // pool A ends in a circle
+    const next = shown(s, A)!
+    expect(next.kind).toBe('tie-breaker')
+    expect(comp(s).categories[0]!.pools.find((p) => p.id === next.poolId)!.name).toBe('A')
+    // Pool B has not started yet.
+    expect(Object.values(comp(s).categories[0]!.matches).filter((m) => m.kind === 'pool' && m.status === 'completed')).toHaveLength(3)
+  })
+})

@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import type { AdminAction } from '@shared/ipc'
 import { describeEntrant } from '@shared/public-view'
-import { computeStandings, poolMatchesComplete, poolsComplete, tieBreakPending, unresolvedTies } from '@shared/standings'
+import { computeStandings, poolDone, poolMatchesComplete, poolsComplete, tieBreakPending, unresolvedTies } from '@shared/standings'
 import type { Pool, Tournament } from '@shared/types'
 import { useConfirm } from './useAdmin'
 
@@ -150,8 +150,9 @@ export function PoolsView({ t, send, manualReview = false }: { t: Tournament; se
   // Review starts once every regular pool match is approved; tie-breakers run per pool.
   const complete = poolMatchesComplete(t)
   const review = t.phase === 'pools' && complete
-  const ties = review ? unresolvedTies(t) : []
-  const pendingPools = review ? t.pools.filter((p) => tieBreakPending(t, p.id)) : []
+  // A pool's tie shows as soon as that pool is finished (its tie-breaker is fought before the next pool).
+  const ties = t.phase === 'pools' ? unresolvedTies(t) : []
+  const pendingPools = t.phase === 'pools' ? t.pools.filter((p) => tieBreakPending(t, p.id)) : []
   const canLock = review && poolsComplete(t) && ties.length === 0
   const [lockArmed, confirmLock] = useConfirm(4000)
   const poolMatches = Object.values(t.matches).filter((m) => m.kind === 'pool')
@@ -218,7 +219,7 @@ export function PoolsView({ t, send, manualReview = false }: { t: Tournament; se
 
       <div className="grid min-h-0 flex-1 auto-rows-min grid-cols-[repeat(auto-fill,minmax(340px,1fr))] gap-4 overflow-y-auto pb-2">
         {t.pools.map((p) => (
-          <PoolTable key={p.id} t={t} pool={p} review={review} send={send} />
+          <PoolTable key={p.id} t={t} pool={p} review={review || (t.phase === 'pools' && poolDone(t, p.id))} send={send} />
         ))}
       </div>
     </div>
