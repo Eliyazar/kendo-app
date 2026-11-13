@@ -106,7 +106,7 @@ Every court has its own laptop and TV:
 The `cloud/` folder is a small Cloudflare Workers site (see `cloud/README.md` for the one-time setup).
 - Enter its URL and publish key under **Settings → Online results**. The laptop publishes every change, and spectators open the link or scan the QR code, using their own mobile data.
 - Spectators find the QR code on the **TV** (large between matches, small in the corner during a match) and on the **A4 poster** (**Settings → Online results → Poster with QR code (PDF)**) for the entrance and the walls.
-- To stay inside the free Cloudflare plan (100,000 requests a day), phones refresh every 15 s while a match is on (60 s otherwise) and the laptop uploads at most every 5 s. For very large audiences the Workers Paid plan ($5/month) removes the worry.
+- Phones refresh every 5 s while a match is on (15 s otherwise) and the laptop uploads at most every 2 s. This needs the Workers Paid plan ($5/month); on the free plan (100,000 requests a day) slow it down in `cloud/web/src/hooks.ts` and `src/main/publisher.ts`.
 - The page shows live courts, schedule, pools, bracket and results, and team captains set their team order with their PIN.
 - An encounter's order stays hidden from everyone else until that encounter starts.
 - If the internet drops, the tournament is unaffected; publishing resumes automatically.
