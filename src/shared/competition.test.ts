@@ -10,7 +10,11 @@ import { computeStandings } from './standings'
 import type { AppState, Side, Tournament } from './types'
 
 let clock = 2_000_000
-const act = (s: AppState, a: AdminAction | { type: 'TICK' }): AppState => reduceApp(s, a, (clock += 1000)).state
+// These tests drive Pool Review by hand: a new competition is switched to manual pool locking.
+const act = (s: AppState, a: AdminAction | { type: 'TICK' }): AppState => {
+  const next = reduceApp(s, a, (clock += 1000)).state
+  return a.type.startsWith('CREATE_') ? reduceApp(next, { type: 'SET_POOL_REVIEW', manual: true }, clock).state : next
+}
 const comp = (s: AppState) => s.competition!
 const cat = (s: AppState, i: number): Tournament => comp(s).categories[i]!
 const court = (s: AppState, i: number) => comp(s).courts[i]!.id

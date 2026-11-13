@@ -340,6 +340,11 @@ export interface Competition {
   courts: CourtSlot[]
   /** In the order they are fought; a free court takes the first category that has a match for it. */
   categories: Tournament[]
+  /**
+   * false/absent (default): when a category's pool matches are all approved, tie-breakers are
+   * added and the eliminations start by themselves. true: the table reviews and locks the pools.
+   */
+  manualPoolReview?: boolean
   createdAt: Timestamp
   updatedAt: Timestamp
 }

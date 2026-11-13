@@ -7,7 +7,11 @@ import { initialState, reduceApp } from './reducer'
 import type { AppState, Side } from './types'
 
 let clock = 5_000_000
-const act = (s: AppState, a: AdminAction): AppState => reduceApp(s, a, (clock += 1000)).state
+// These tests drive Pool Review by hand: a new competition is switched to manual pool locking.
+const act = (s: AppState, a: AdminAction): AppState => {
+  const next = reduceApp(s, a, (clock += 1000)).state
+  return a.type.startsWith('CREATE_') ? reduceApp(next, { type: 'SET_POOL_REVIEW', manual: true }, clock).state : next
+}
 const tryAct = (s: AppState, a: AdminAction) => reduceApp(s, a, (clock += 1000))
 const comp = (s: AppState) => s.competition!
 const court = (s: AppState, i: number) => comp(s).courts[i]!.id
@@ -252,5 +256,56 @@ describe('restart and category order', () => {
     s = act(s, { type: 'TIMER_START', courtId: A })
     s = act(s, { type: 'MOVE_CATEGORY', categoryId: first!.id, direction: 'up' })
     expect(onCourt(comp(s), A)!.category.id).toBe(second!.id)
+  })
+})
+
+describe('eliminations start right after the pools (default)', () => {
+  it('locks the pools and fights the bracket of that category before the next category', () => {
+    let s = reduceApp(initialState(), {
+      type: 'CREATE_COMPETITION',
+      setup: {
+        name: 'Cup',
+        date: '2026-11-07',
+        courts: 1,
+        categories: [
+          category('Juniors', people(['J1', 'J2', 'J3', 'J4']), { poolSize: 2, advancePerPool: 1 }),
+          category('Veterans', people(['V1', 'V2', 'V3']))
+        ]
+      }
+    }, (clock += 1000)).state
+    const A = court(s, 0)
+    const juniors = comp(s).categories[0]!.id
+    s = win(s, A)
+    s = win(s, A) // last pool match of Juniors
+    const t = comp(s).categories[0]!
+    expect(t.phase).toBe('bracket')
+    expect(onCourt(comp(s), A)!.category.id).toBe(juniors)
+    expect(shown(s, A)!.kind).toBe('bracket')
+    s = win(s, A) // the final
+    expect(comp(s).categories[0]!.phase).toBe('finished')
+    expect(onCourt(comp(s), A)!.category.name).toBe('Veterans')
+  })
+
+  it('a flagged tie gets its tie-breaker automatically; a second circle waits for the table', () => {
+    let s = reduceApp(initialState(), {
+      type: 'CREATE_COMPETITION',
+      setup: {
+        name: 'Cup',
+        date: '2026-11-07',
+        courts: 1,
+        categories: [category('Trio', people(['Ana', 'Bea', 'Cia']), { predrawn: { pools: [{ name: 'A', entrants: ['Ana', 'Bea', 'Cia'], matches: [['Ana', 'Bea'], ['Bea', 'Cia'], ['Ana', 'Cia']] }], bracket: [] } })]
+      }
+    }, (clock += 1000)).state
+    const A = court(s, 0)
+    s = win(s, A, 'aka')
+    s = win(s, A, 'aka')
+    s = win(s, A, 'shiro') // a perfect circle
+    expect(shown(s, A)!.kind).toBe('tie-breaker')
+    // The tie-breaker round robin ends in a circle again (aka always wins).
+    for (let i = 0; i < 3; i++) s = win(s, A, 'aka')
+    const t = comp(s).categories[0]!
+    expect(t.phase).toBe('pools')
+    expect(unresolvedTies(t)).toHaveLength(1)
+    expect(shown(s, A)).toBeUndefined()
   })
 })

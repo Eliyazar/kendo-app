@@ -90,7 +90,7 @@ function tickCategory(t: Tournament, now: number): Tournament {
 // Category level
 // ---------------------------------------------------------------------------
 
-type CategoryAction = Exclude<AppAction, { type: 'TICK' | 'DEV_LOAD_DEMO' | 'CREATE_TOURNAMENT' | 'CREATE_COMPETITION' | 'RESET_TOURNAMENT' | 'RESTART_COMPETITION' | 'MOVE_CATEGORY' }>
+type CategoryAction = Exclude<AppAction, { type: 'TICK' | 'DEV_LOAD_DEMO' | 'CREATE_TOURNAMENT' | 'CREATE_COMPETITION' | 'RESET_TOURNAMENT' | 'RESTART_COMPETITION' | 'MOVE_CATEGORY' | 'SET_POOL_REVIEW' }>
 
 export function reduceCategory(t: Tournament, action: CategoryAction, now: number): Tournament {
   switch (action.type) {
@@ -146,7 +146,7 @@ export function reduceCategory(t: Tournament, action: CategoryAction, now: numbe
     }
 
     case 'LOCK_POOLS': {
-      if (t.phase !== 'pools') throw new RuleError('Pools are already locked.')
+      if (t.phase !== 'pools') return t // already locked (e.g. automatically)
       if (!poolsComplete(t)) throw new RuleError('Finish all pool matches first.')
       if (unresolvedTies(t).length) throw new RuleError('Resolve the flagged ties first.')
       try {
@@ -299,10 +299,38 @@ const COURT_ACTIONS: ReadonlySet<AppAction['type']> = new Set([
   'SWAP_SIDES'
 ])
 
+/**
+ * Eliminations right after the pools: when every pool match of a category is approved,
+ * flagged ties get their tie-breakers, and once nothing is open the pools are locked and the
+ * bracket is built (or the category finishes when the pool ranking is the result).
+ * Skipped when the table reviews the pools by hand.
+ */
+function advancePools(comp: Competition, now: number): Competition {
+  if (comp.manualPoolReview) return comp
+  let changed = false
+  const categories = comp.categories.map((t) => {
+    if (t.phase !== 'pools' || !poolMatchesComplete(t) || !poolsComplete(t)) return t
+    try {
+      const ties = unresolvedTies(t)
+      // Still tied after a tie-breaker (e.g. a circle again): the table decides in Pool Review.
+      const hadTieBreaker = (poolId: string) => Object.values(t.matches).some((m) => m.kind === 'tie-breaker' && m.poolId === poolId)
+      if (ties.some((tie) => hadTieBreaker(tie.poolId))) return t
+      let next = t
+      if (ties.length) for (const tie of ties) next = reduceCategory(next, { type: 'GENERATE_TIE_BREAKER', poolId: tie.poolId, entrantIds: tie.entrantIds }, now)
+      else next = reduceCategory(next, { type: 'LOCK_POOLS', categoryId: t.id }, now)
+      changed ||= next !== t
+      return next
+    } catch {
+      return t // e.g. a bracket sheet that does not fit: the table sees it in Pool Review
+    }
+  })
+  return changed ? { ...comp, categories } : comp
+}
+
 export function reduceApp(state: AppState, action: AppAction, now: number): AppUpdate {
   const comp = state.competition
   const commit = (next: Competition | null): AppUpdate => ({
-    state: { ...state, competition: next && { ...arrangeCourts(next), updatedAt: now }, revision: state.revision + 1 },
+    state: { ...state, competition: next && { ...arrangeCourts(advancePools(next, now)), updatedAt: now }, revision: state.revision + 1 },
     changed: true
   })
 
@@ -330,6 +358,12 @@ export function reduceApp(state: AppState, action: AppAction, now: number): AppU
         categories: comp.categories.map(restartCategory),
         courts: comp.courts.map(({ id, name }) => ({ id, name, categoryId: null }))
       })
+    }
+
+    case 'SET_POOL_REVIEW': {
+      if (!comp) throw new RuleError('No competition loaded.')
+      const { manualPoolReview: _m, ...rest } = comp
+      return commit(action.manual ? { ...rest, manualPoolReview: true } : rest)
     }
 
     case 'MOVE_CATEGORY': {

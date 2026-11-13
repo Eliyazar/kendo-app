@@ -325,7 +325,7 @@ export function AdminApp() {
       ) : tab === 'pools' || tab === 'bracket' || tab === 'participants' ? (
         <div className="flex min-h-0 flex-1 flex-col gap-3">
           <CategoryPicker comp={comp} value={t.id} onChange={setPicked} />
-          {tab === 'pools' ? <PoolsView t={t} send={fire} /> : tab === 'bracket' ? <BracketView t={t} send={fire} podiumShown={comp.courts.find((c) => c.id === courtId)?.podiumCategoryId === t.id} /> : <ParticipantsView t={t} send={send} />}
+          {tab === 'pools' ? <PoolsView t={t} send={fire} manualReview={comp.manualPoolReview ?? false} /> : tab === 'bracket' ? <BracketView t={t} send={fire} podiumShown={comp.courts.find((c) => c.id === courtId)?.podiumCategoryId === t.id} /> : <ParticipantsView t={t} send={send} />}
         </div>
       ) : (
         <div className="flex min-h-0 flex-1 gap-4">

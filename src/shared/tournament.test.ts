@@ -7,9 +7,11 @@ import { computeStandings, poolsComplete, unresolvedTies } from './standings'
 import type { AppState, Side, Tournament } from './types'
 
 let clock = 1_000_000
+// These tests drive Pool Review by hand: a new competition is switched to manual pool locking.
 function act(s: AppState, a: AdminAction | { type: 'TICK' }): AppState {
   clock += 1000
-  return reduceApp(s, a, clock).state
+  const next = reduceApp(s, a, clock).state
+  return a.type.startsWith('CREATE_') ? reduceApp(next, { type: 'SET_POOL_REVIEW', manual: true }, clock).state : next
 }
 const tour = (s: AppState): Tournament => s.competition!.categories[0]!
 const activeId = (s: AppState) => tour(s).courts[0]!.activeMatchId

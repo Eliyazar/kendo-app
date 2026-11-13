@@ -146,7 +146,7 @@ function PoolTable({ t, pool, review, send }: { t: Tournament; pool: Pool; revie
   )
 }
 
-export function PoolsView({ t, send }: { t: Tournament; send: (a: AdminAction) => void }) {
+export function PoolsView({ t, send, manualReview = false }: { t: Tournament; send: (a: AdminAction) => void; manualReview?: boolean }) {
   // Review starts once every regular pool match is approved; tie-breakers run per pool.
   const complete = poolMatchesComplete(t)
   const review = t.phase === 'pools' && complete
@@ -159,6 +159,10 @@ export function PoolsView({ t, send }: { t: Tournament; send: (a: AdminAction) =
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4">
+      <label className="flex items-center gap-2 px-1 text-sm text-white/70" title="Applies to every category of the competition">
+        <input type="checkbox" className="h-4 w-4" checked={!manualReview} onChange={(e) => send({ type: 'SET_POOL_REVIEW', manual: !e.target.checked })} />
+        Start the eliminations automatically when a category's pools are done (untick to review and lock the pools by hand, e.g. to add a playoff first)
+      </label>
       <div className="flex items-center gap-4 rounded-2xl border border-white/10 bg-neutral-900 px-5 py-4">
         <div className="flex-1">
           <h2 className="text-xl font-black">{review ? 'Pool Review' : 'Pools'}</h2>
@@ -167,7 +171,7 @@ export function PoolsView({ t, send }: { t: Tournament; send: (a: AdminAction) =
               ? 'Pools are locked. Standings are final.'
               : complete
                 ? `All pool matches are approved. ${t.bracketPlan?.kind === 'none' ? 'The pool ranking gives 1st, 2nd and 3rd place.' : `Top ${t.advancePerPool} of each pool qualify.`} Ranking: wins › ${t.mode === 'team' ? 'bouts won › ' : ''}playoff wins › ippons scored › ippons conceded › head-to-head.`
-                : `${done} of ${poolMatches.length} pool ${t.mode === 'team' ? 'bouts' : 'matches'} approved.`}
+                : `${done} of ${poolMatches.length} pool ${t.mode === 'team' ? 'bouts' : 'matches'} approved.${manualReview ? '' : ' The eliminations start by themselves after the last one.'}`}
           </p>
         </div>
         {t.phase === 'pools' && (

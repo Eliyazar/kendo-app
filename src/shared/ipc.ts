@@ -89,6 +89,8 @@ export type AdminAction =
   | { type: 'CREATE_TOURNAMENT'; setup: TournamentSetup }
   | { type: 'CREATE_COMPETITION'; setup: CompetitionSetup }
   | { type: 'RESET_TOURNAMENT' }
+  /** true: the table locks the pools by hand (Pool Review); false: eliminations start by themselves. */
+  | { type: 'SET_POOL_REVIEW'; manual: boolean }
   /** Same draw from the start: every result is cleared (the current state is archived first). */
   | { type: 'RESTART_COMPETITION' }
   /** Move a category earlier or later in the order the courts fight them. */
@@ -138,6 +140,7 @@ export const ADMIN_ACTION_TYPES: readonly AdminActionType[] = [
   'CREATE_TOURNAMENT',
   'CREATE_COMPETITION',
   'RESET_TOURNAMENT',
+  'SET_POOL_REVIEW',
   'RESTART_COMPETITION',
   'MOVE_CATEGORY',
   'GENERATE_TIE_BREAKER',

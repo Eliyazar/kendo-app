@@ -71,6 +71,7 @@ export function parseAdminAction(input: unknown, allowDev: boolean): AdminAction
   if (type === 'DEV_LOAD_DEMO' && !allowDev) return null
   if (type === 'ADD_IPPON' && !(SIDES.includes(a['side'] as string) && TECHNIQUES.includes(a['technique'] as string))) return null
   if ((type === 'ADD_HANSOKU' || type === 'FUSEN_GACHI' || type === 'SET_REPRESENTATIVE' || type === 'KIKEN') && !SIDES.includes(a['side'] as string)) return null
+  if (type === 'SET_POOL_REVIEW' && typeof a['manual'] !== 'boolean') return null
   if (type === 'MOVE_CATEGORY' && a['direction'] !== 'up' && a['direction'] !== 'down') return null
   if (type === 'MOVE_IN_QUEUE' && a['direction'] !== 'up' && a['direction'] !== 'down') return null
   if (type === 'ADD_PLAYOFF' && a['encho'] !== undefined && typeof a['encho'] !== 'boolean') return null
