@@ -345,6 +345,8 @@ export interface Competition {
    * added and the eliminations start by themselves. true: the table reviews and locks the pools.
    */
   manualPoolReview?: boolean
+  /** Code of the online results page; made from the name and date, so re-importing the same competition keeps its link and QR code. */
+  publicCode?: string
   createdAt: Timestamp
   updatedAt: Timestamp
 }

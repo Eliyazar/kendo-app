@@ -2,7 +2,9 @@
 // kiken during a match, swap Aka and Shiro before the start.
 
 import { onCourt, peopleIn } from './competition'
+import { buildBracket } from './bracket'
 import { fillCourts } from './courts'
+import { parseBracketText, poolLetter } from './setup'
 import { createMeeting, enqueue, setLineup } from './encounters'
 import { kiken, opponent, RuleError } from './match-engine'
 import { afterMatchCompleted } from './progress'
@@ -299,4 +301,47 @@ export function restartCategory(t: Tournament): Tournament {
     }
   }
   return fillCourts(next)
+}
+
+// ---------------------------------------------------------------------------
+// Change the elimination during the competition
+// ---------------------------------------------------------------------------
+
+/** The bracket can still change: pools not locked yet, or no elimination match has started. */
+export function canChangeBracket(t: Tournament): boolean {
+  if (t.pools.length < 2) return false
+  if (t.phase === 'pools') return true
+  if (t.phase !== 'bracket') return false
+  return Object.values(t.matches).every((m) => m.kind !== 'bracket' || !started(m))
+}
+
+/**
+ * Set the elimination pairings ("A1–B2, B1–A2", see parseBracketText; empty = drawn by the app).
+ * If the bracket already exists and nothing in it has started, it is rebuilt with the same qualifiers.
+ */
+export function setBracket(t: Tournament, text: string): Tournament {
+  if (!canChangeBracket(t)) throw new RuleError('The elimination has started; it can no longer be changed.')
+  const pairs = parseBracketText(text, t.pools.map((p) => poolLetter(p.name)))
+  if (typeof pairs === 'string') throw new RuleError(pairs)
+  const plan: Tournament['bracketPlan'] = pairs.length ? { kind: 'pairs', pairs } : { kind: 'auto' }
+  if (t.phase === 'pools') return { ...t, bracketPlan: plan }
+  // Rebuild: drop the unstarted elimination meetings and build again from the pool standings.
+  const drop = new Set(Object.values(t.matches).filter((m) => m.kind === 'bracket').map((m) => m.id))
+  const matches = Object.fromEntries(Object.entries(t.matches).filter(([id]) => !drop.has(id)))
+  const teamMatches = Object.fromEntries(Object.entries(t.teamMatches).filter(([, tm]) => tm.kind !== 'bracket'))
+  const cleared: Tournament = {
+    ...t,
+    bracketPlan: plan,
+    bracket: null,
+    phase: 'pools',
+    matches,
+    teamMatches,
+    matchQueue: t.matchQueue.filter((id) => !drop.has(id)),
+    courts: t.courts.map((c) => (c.activeMatchId && drop.has(c.activeMatchId) ? { ...c, activeMatchId: null } : c))
+  }
+  try {
+    return fillCourts(buildBracket(cleared))
+  } catch (err) {
+    throw new RuleError(err instanceof Error ? err.message : String(err))
+  }
 }

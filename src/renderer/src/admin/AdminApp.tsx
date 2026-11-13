@@ -1,6 +1,6 @@
 // Admin Control Panel (laptop screen).
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { AdminAction, AdminSnapshot, Notice } from '@shared/ipc'
 import { champion } from '@shared/public-view'
 import { onCourt, waitingOn } from '@shared/competition'
@@ -231,11 +231,16 @@ export function AdminApp() {
   const client = snap?.settings.court.role === 'client'
   useShortcuts(match, tab === 'match', fire)
 
-  // After Lock Pools the first bracket match is loaded: go back to the shiai-jo.
-  const phase = t?.phase
+  // After Lock Pools (by hand, in the Pools tab) the first bracket match is loaded: go back to the shiai-jo.
+  // Only when the same category moves from pools to bracket, not when another category is picked.
+  const phaseKey = t ? `${t.id}:${t.phase}` : ''
+  const lastPhase = useRef(phaseKey)
   useEffect(() => {
-    if (phase === 'bracket') setTab('match')
-  }, [phase])
+    const [id, phase] = phaseKey.split(':')
+    const [prevId, prevPhase] = lastPhase.current.split(':')
+    lastPhase.current = phaseKey
+    if (tab === 'pools' && id === prevId && prevPhase === 'pools' && phase === 'bracket') setTab('match')
+  }, [phaseKey, tab])
 
   const needsReps = match?.representative && match.status === 'scheduled'
   const repsMissing = Boolean(match?.representative && (!match.aka.playerId || !match.shiro.playerId))

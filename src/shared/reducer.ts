@@ -5,8 +5,9 @@
 //   pools -> bracket). A category is a Tournament.
 
 import { buildBracket } from './bracket'
+import { publicCodeFor } from './published'
 import { arrangeCourts, categoryById, categoryOwning, fightingElsewhere, onCourt, withCategory } from './competition'
-import { addPlayoff, kikenOnCourt, moveInQueue, postpone, removeExtraMatch, restartCategory, swapSides, takePool } from './court-tools'
+import { addPlayoff, setBracket, kikenOnCourt, moveInQueue, postpone, removeExtraMatch, restartCategory, swapSides, takePool } from './court-tools'
 import { activeMatchOn, courtOf, makeCourts, withCourt } from './courts'
 import { createDemoSetup } from './demo'
 import {
@@ -192,6 +193,9 @@ export function reduceCategory(t: Tournament, action: CategoryAction, now: numbe
     case 'EDIT_RESULT':
       return editResult(t, action.matchId, cleanEntries(action.entries), now)
 
+    case 'SET_BRACKET':
+      return setBracket(t, action.text)
+
     case 'ADD_PLAYOFF':
       return addPlayoff(t, action.poolId, action.entrantIds[0]!, action.entrantIds[1]!, action.encho !== false)
 
@@ -253,6 +257,7 @@ function newCompetition(spec: { name: string; date: string; courts: number; cate
   })
   return arrangeCourts({
     id: uid('comp'),
+    publicCode: publicCodeFor(spec.name, spec.date),
     name: spec.name,
     date: spec.date,
     courts: courts.map((c) => ({ id: c.id, name: c.name, categoryId: null })),

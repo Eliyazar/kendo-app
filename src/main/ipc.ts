@@ -29,6 +29,7 @@ const STRING_FIELDS: Partial<Record<AdminAction['type'], string[]>> = {
   LOAD_MATCH: ['matchId'],
   TAKE_POOL: ['poolId'],
   MOVE_CATEGORY: ['categoryId'],
+  SET_BRACKET: ['categoryId'],
   ADD_PLAYOFF: ['poolId'],
   REMOVE_MATCH: ['matchId'],
   MOVE_IN_QUEUE: ['matchId'],
@@ -71,6 +72,7 @@ export function parseAdminAction(input: unknown, allowDev: boolean): AdminAction
   if (type === 'DEV_LOAD_DEMO' && !allowDev) return null
   if (type === 'ADD_IPPON' && !(SIDES.includes(a['side'] as string) && TECHNIQUES.includes(a['technique'] as string))) return null
   if ((type === 'ADD_HANSOKU' || type === 'FUSEN_GACHI' || type === 'SET_REPRESENTATIVE' || type === 'KIKEN') && !SIDES.includes(a['side'] as string)) return null
+  if (type === 'SET_BRACKET' && !(typeof a['text'] === 'string' && (a['text'] as string).length <= 1000)) return null
   if (type === 'SET_POOL_REVIEW' && typeof a['manual'] !== 'boolean') return null
   if (type === 'MOVE_CATEGORY' && a['direction'] !== 'up' && a['direction'] !== 'down') return null
   if (type === 'MOVE_IN_QUEUE' && a['direction'] !== 'up' && a['direction'] !== 'down') return null

@@ -589,12 +589,20 @@ function buildCategory(a: Acc, sheet: SheetCells): DrawCategory {
   for (const pool of pools) for (const k of pool.entrantKeys) poolsOf.set(k, (poolsOf.get(k) ?? 0) + 1)
   for (const [k, n] of poolsOf) if (n > 1) warn(`"${nameOf(k)}" appears in ${n} pools`)
 
-  // bracket: rows top to bottom, two refs per row form a pairing
+  // bracket: drawn as columns (left half, right half), each read top to bottom in pairs:
+  //   A1   B1        left: A1–B2   right: B1–A2
+  //   B2   A2
+  // A sheet that lists one pairing per row instead (odd columns) falls back to rows.
   const bracket: [string, string][] = []
+  const byCol = new Map<number, Ref[]>()
+  for (const r of a.refs) byCol.set(r.col, [...(byCol.get(r.col) ?? []), r])
+  const columns = [...byCol.keys()].sort((x, y) => x - y).map((c) => byCol.get(c)!.sort((x, y) => x.row - y.row))
+  const byColumns = columns.length > 0 && columns.every((col) => col.length % 2 === 0) && a.refs.length > 2
+  if (byColumns) for (const col of columns) for (let i = 0; i + 1 < col.length; i += 2) bracket.push([col[i]!.ref, col[i + 1]!.ref])
   const byRow = new Map<number, Ref[]>()
   for (const r of a.refs) byRow.set(r.row, [...(byRow.get(r.row) ?? []), r])
   const singles: string[] = []
-  for (const row of [...byRow.keys()].sort((x, y) => x - y)) {
+  for (const row of byColumns ? [] : [...byRow.keys()].sort((x, y) => x - y)) {
     const list = (byRow.get(row) ?? []).sort((x, y) => x.col - y.col)
     let i = 0
     for (; i + 1 < list.length; i += 2) bracket.push([list[i]!.ref, list[i + 1]!.ref])

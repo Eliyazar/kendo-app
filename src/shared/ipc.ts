@@ -108,6 +108,8 @@ export type AdminAction =
   | { type: 'SET_LINEUP'; teamMatchId: string; teamId: string; lineup: (string | null)[] }
   | { type: 'EDIT_RESULT'; matchId: string; entries: ScoreEntry[] }
   | { type: 'MOVE_MATCH'; matchId: string; courtId: string }
+  /** Elimination pairings written slot by slot ("A1–B2, B1–A2"); empty = drawn by the app. */
+  | { type: 'SET_BRACKET'; categoryId: string; text: string }
   /** The table adds a match (playoff) between two members of a pool. */
   | { type: 'ADD_PLAYOFF'; poolId: string; entrantIds: string[]; encho?: boolean }
   /** Delete an added match (tie-breaker / playoff) that has not started. */
@@ -156,6 +158,7 @@ export const ADMIN_ACTION_TYPES: readonly AdminActionType[] = [
   'SET_LINEUP',
   'EDIT_RESULT',
   'MOVE_MATCH',
+  'SET_BRACKET',
   'ADD_PLAYOFF',
   'REMOVE_MATCH',
   'MOVE_IN_QUEUE',

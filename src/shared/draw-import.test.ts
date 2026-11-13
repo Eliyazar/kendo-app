@@ -111,7 +111,8 @@ describe('individual draw sheet, two pools', () => {
     expect(c.pools[1]!.matches[3]).toEqual(['gina eta', 'dora delta'])
     expect(c.pools[1]!.matches).toHaveLength(6)
     expect(names(c)).toHaveLength(7)
-    expect(c.bracket).toEqual([['A1', 'B1'], ['B2', 'A2']])
+    // Two columns, each read top to bottom: A1–B2 (left half), B1–A2 (right half).
+    expect(c.bracket).toEqual([['A1', 'B2'], ['B1', 'A2']])
     expect(c.warnings).toEqual([])
   })
 })
@@ -142,8 +143,8 @@ describe('four pools and a four-pairing bracket', () => {
     expect(c.entrants).toHaveLength(12)
   })
 
-  it('orders bracket pairings by row', () => {
-    expect(c.bracket).toEqual([['A1', 'B1'], ['C2', 'D2'], ['D1', 'C1'], ['B2', 'A2']])
+  it('reads the bracket column by column: a winner meets a second of another pool', () => {
+    expect(c.bracket).toEqual([['A1', 'C2'], ['D1', 'B2'], ['B1', 'D2'], ['C1', 'A2']])
     expect(c.warnings).toEqual([])
   })
 })

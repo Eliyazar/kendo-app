@@ -309,3 +309,35 @@ describe('eliminations start right after the pools (default)', () => {
     expect(shown(s, A)).toBeUndefined()
   })
 })
+
+describe('changing the elimination during the competition', () => {
+  it('rebuilds the bracket while no elimination match has started', () => {
+    const six = ['A1x', 'A2x', 'A3x', 'B1x', 'B2x', 'B3x']
+    const pool = (n: string, e: string[]) => ({ name: n, entrants: e, matches: [[e[0]!, e[1]!], [e[1]!, e[2]!], [e[0]!, e[2]!]] as [string, string][] })
+    let s = create({
+      name: 'Cup',
+      date: '2026-11-07',
+      courts: 1,
+      categories: [category('Jr', people(six), { predrawn: { pools: [pool('A', six.slice(0, 3)), pool('B', six.slice(3))], bracket: [['A1', 'B1'], ['B2', 'A2']] } })]
+    })
+    const A = court(s, 0)
+    for (let i = 0; i < 6; i++) s = win(s, A)
+    const id = comp(s).categories[0]!.id
+    s = act(s, { type: 'LOCK_POOLS', categoryId: id })
+    const first = () => {
+      const t = comp(s).categories[0]!
+      return Object.values(t.bracket!.nodes).filter((n) => n.round === 0).sort((a, b) => a.slot - b.slot).map((n) => [n.akaEntrantId, n.shiroEntrantId])
+    }
+    const place = (pl: string) => {
+      const t = comp(s).categories[0]!
+      const p = t.pools.find((x) => x.name.endsWith(pl[0]!))!
+      return computeStandings(t, p)[Number(pl[1]) - 1]!.entrantId
+    }
+    expect(first()).toEqual([[place('A1'), place('B1')], [place('B2'), place('A2')]])
+    s = act(s, { type: 'SET_BRACKET', categoryId: id, text: 'A1–B2, B1–A2' })
+    expect(first()).toEqual([[place('A1'), place('B2')], [place('B1'), place('A2')]])
+    expect(shown(s, A)!.kind).toBe('bracket')
+    s = act(s, { type: 'TIMER_START', courtId: A })
+    expect(() => tryAct(s, { type: 'SET_BRACKET', categoryId: id, text: 'A1–B1, B2–A2' })).toThrow(/started/)
+  })
+})

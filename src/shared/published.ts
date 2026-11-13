@@ -176,7 +176,17 @@ export interface LineupSubmission {
 }
 
 /** Online page address for a competition: short and stable. */
-export const slugFor = (c: { id: Id }): string => c.id.replace(/^(comp|tour)_/, '')
+export const slugFor = (c: { id: Id; publicCode?: string }): string => c.publicCode ?? c.id.replace(/^(comp|tour)_/, '')
+
+/** Stable 8-character code from the competition's name and date (FNV-1a hash). */
+export function publicCodeFor(name: string, date: string): string {
+  let h = 0x811c9dc5
+  for (const ch of `${name.trim().toLowerCase()}|${date}`) {
+    h ^= ch.codePointAt(0)!
+    h = Math.imul(h, 0x01000193) >>> 0
+  }
+  return h.toString(16).padStart(8, '0')
+}
 
 const marksOf = (m: Match, side: Side): string => computeScore(m.events)[side].marks.map((mk) => markLetter(mk) || '○').join('')
 
