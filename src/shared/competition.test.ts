@@ -262,3 +262,37 @@ describe('team country from the team name', () => {
     expect(countryFromTeamName('Meiyo')).toBeUndefined()
   })
 })
+
+describe('bracket written slot by slot', () => {
+  it('reads pairs and byes, and rejects wrong sizes, unknown pools and doubles', async () => {
+    const { parseBracketText, bracketText } = await import('./setup')
+    const letters = ['A', 'B', 'C', 'D']
+    const r = parseBracketText('A1, B2/D2, C1–A2, D1 - B1', letters)
+    expect(r).toEqual([['A1', 'BYE'], ['B2', 'D2'], ['C1', 'A2'], ['D1', 'B1']])
+    expect(bracketText(r as [string, string][])).toBe('A1, B2–D2, C1–A2, D1–B1')
+    expect(parseBracketText('A1, B1, C1', letters)).toMatch(/3 slots/)
+    expect(parseBracketText('A1, X1', letters)).toMatch(/no pool X/)
+    expect(parseBracketText('A1, A1', letters)).toMatch(/twice/)
+    expect(parseBracketText('', letters)).toEqual([])
+  })
+
+  it('a bracket with byes: lone fighters go straight to the next round', () => {
+    const entrants = Array.from({ length: 9 }, (_, i) => ({ name: `P${i}`, dojo: '' }))
+    const pools = ['A', 'B', 'C'].map((l, k) => ({ name: `Pool ${l}`, entrants: entrants.slice(k * 3, k * 3 + 3).map((e) => e.name), matches: [] as [string, string][] }))
+    for (const p of pools) p.matches = [[p.entrants[0]!, p.entrants[1]!], [p.entrants[1]!, p.entrants[2]!], [p.entrants[0]!, p.entrants[2]!]]
+    let s = create({
+      name: 'Cup',
+      date: '2026-11-07',
+      courts: 1,
+      categories: [category('Men', { entrants, predrawn: { pools, bracket: [['A1', 'BYE'], ['B2', 'C2'], ['C1', 'BYE'], ['A2', 'B1']] } })]
+    })
+    const A = court(s, 0)
+    for (let i = 0; i < 9; i++) s = win(s, A)
+    s = act(s, { type: 'LOCK_POOLS', categoryId: cat(s, 0).id })
+    const b = cat(s, 0).bracket!
+    const r1 = Object.values(b.nodes).filter((n) => n.round === 0)
+    expect(b.rounds).toBe(3)
+    expect(r1.filter((n) => n.matchId)).toHaveLength(2)
+    expect(r1.filter((n) => n.winnerEntrantId && !n.matchId)).toHaveLength(2)
+  })
+})

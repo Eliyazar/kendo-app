@@ -569,6 +569,8 @@ function buildCategory(a: Acc, sheet: SheetCells): DrawCategory {
     }
     pools.push(pool)
   }
+  // Pools drawn side by side are read row by row (A, G, B, H…): put them in name order (A, B, C…).
+  pools.sort((x, y) => x.name.localeCompare(y.name, 'en', { numeric: true }))
 
   const nameOf = (k: string): string => reg.recs.get(k)?.name ?? k
 
@@ -630,7 +632,8 @@ function buildCategory(a: Acc, sheet: SheetCells): DrawCategory {
   }
 
   if (a.syn) warn('No category title found for these teams')
-  const name = a.title ? clean(a.title.text) : 'Teams'
+  // "Men individual - Pools" -> "Men individual" (the pools file of a category).
+  const name = a.title ? clean(a.title.text).replace(/\s*[-–—:]\s*(pools?|groups?)\s*$/i, '') || clean(a.title.text) : 'Teams'
   return {
     name,
     mode,

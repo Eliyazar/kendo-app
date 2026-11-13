@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import type { AdminAction, DrawImportResult } from '@shared/ipc'
 import { competitionFromDrafts, courtsNeeded, draftsFromDraw, type CategoryDraft } from '@shared/draw-setup'
-import { validateSetup } from '@shared/setup'
+import { bracketText, parseBracketText, poolLetter, validateSetup } from '@shared/setup'
 import type { TeamSize } from '@shared/types'
 
 type Loaded = Extract<DrawImportResult, { ok: true }>
@@ -11,6 +11,38 @@ type Loaded = Extract<DrawImportResult, { ok: true }>
 const field = 'w-full rounded-lg border border-white/10 bg-neutral-800 px-3 py-2 text-white outline-none focus:border-amber-500'
 const small = 'rounded-md border border-white/10 bg-neutral-800 px-2 py-1 text-sm'
 const LETTERS = ['A', 'B', 'C', 'D']
+
+/** Elimination written slot by slot as on the bracket sheet; empty = the app draws it. */
+function BracketField({ value, letters, onChange }: { value: [string, string][]; letters: string[]; onChange: (v: [string, string][]) => void }) {
+  const [text, setText] = useState(bracketText(value))
+  const [error, setError] = useState<string | null>(null)
+  const commit = () => {
+    const r = parseBracketText(text, letters)
+    if (typeof r === 'string') return setError(r)
+    setError(null)
+    onChange(r)
+    setText(bracketText(r))
+  }
+  return (
+    <div className="mt-3 text-sm">
+      <label className="flex items-center gap-2">
+        <span className="shrink-0 text-white/50">Elimination</span>
+        <input
+          className={`${small} min-w-0 flex-1 font-mono ${error ? 'border-red-500' : ''}`}
+          value={text}
+          placeholder="empty = drawn by the app (pool winners apart)"
+          onChange={(e) => setText(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => e.key === 'Enter' && commit()}
+        />
+      </label>
+      <p className={`mt-1 text-xs ${error ? 'text-red-400' : 'text-white/40'}`}>
+        {error ??
+          'Top to bottom as on the bracket sheet: "A1–B2" is a first-round match, a lone "C1" waits for the next round. E.g. "A1, B2–D2, C1, J2" = A1 meets the winner of B2–D2, C1 meets J2.'}
+      </p>
+    </div>
+  )
+}
 
 export function DrawImportPanel({ loaded, send, onCancel }: { loaded: Loaded; send: (a: AdminAction) => Promise<boolean>; onCancel: () => void }) {
   const [name, setName] = useState(loaded.eventName ?? '')
@@ -26,6 +58,13 @@ export function DrawImportPanel({ loaded, send, onCancel }: { loaded: Loaded; se
   const [busy, setBusy] = useState(false)
 
   const patch = (i: number, p: Partial<CategoryDraft>) => setDrafts((ds) => ds.map((d, j) => (j === i ? { ...d, ...p } : d)))
+  const move = (i: number, by: number) =>
+    setDrafts((ds) => {
+      const next = [...ds]
+      const [d] = next.splice(i, 1)
+      next.splice(i + by, 0, d!)
+      return next
+    })
   const errorOf = (d: CategoryDraft): string | null => {
     const v = validateSetup({ ...d, date, courts })
     return typeof v === 'string' ? v : null
@@ -78,13 +117,22 @@ export function DrawImportPanel({ loaded, send, onCancel }: { loaded: Loaded; se
           const err = d.include ? errorOf(d) : null
           const units = d.mode === 'team' ? new Set(d.entrants.map((e) => e.team)).size : d.entrants.length
           return (
-            <div key={i} className={`rounded-xl border p-4 ${err ? 'border-red-500/60' : 'border-white/10'} ${d.include ? '' : 'opacity-50'}`}>
+            <div key={`${d.source}-${d.drawSeed}`} className={`rounded-xl border p-4 ${err ? 'border-red-500/60' : 'border-white/10'} ${d.include ? '' : 'opacity-50'}`}>
               <div className="flex flex-wrap items-center gap-3">
+                <span className="flex flex-col">
+                  <button disabled={i === 0} onClick={() => move(i, -1)} className="px-1 text-xs text-white/60 hover:text-white disabled:opacity-20" title="Fight this category earlier">
+                    ▲
+                  </button>
+                  <button disabled={i === drafts.length - 1} onClick={() => move(i, 1)} className="px-1 text-xs text-white/60 hover:text-white disabled:opacity-20" title="Fight this category later">
+                    ▼
+                  </button>
+                </span>
+                <span className="w-5 text-center text-sm font-bold text-white/40">{i + 1}</span>
                 <input type="checkbox" className="h-5 w-5" checked={d.include} onChange={(e) => patch(i, { include: e.target.checked })} />
                 <input className={`${small} w-64 font-bold`} value={d.name} onChange={(e) => patch(i, { name: e.target.value })} />
                 <span className="text-sm text-white/60">
                   {d.mode === 'team' ? `${units} teams` : `${units} players`} ·{' '}
-                  {d.predrawn ? `${d.predrawn.pools.length} pool(s) from the file${d.predrawn.bracket.length ? `, bracket ${d.predrawn.bracket.map((p) => p.join('–')).join(', ')}` : d.predrawn.pools.length === 1 ? ', no elimination (pool ranking = podium)' : ''}` : 'pools drawn by the app'}
+                  {d.predrawn ? `${d.predrawn.pools.length} pool(s) from the file${d.predrawn.pools.length === 1 && !d.predrawn.bracket.length ? ', no elimination (pool ranking = 1st, 2nd, 3rd)' : ''}` : 'pools drawn by the app'}
                 </span>
               </div>
               <div className="mt-3 flex flex-wrap items-center gap-4 text-sm">
@@ -151,6 +199,13 @@ export function DrawImportPanel({ loaded, send, onCancel }: { loaded: Loaded; se
                 )}
                 <span className="ml-auto text-xs text-white/40">{d.source}</span>
               </div>
+              {d.predrawn && d.predrawn.pools.length > 1 && (
+                <BracketField
+                  value={d.predrawn.bracket}
+                  letters={d.predrawn.pools.map((pl) => poolLetter(pl.name))}
+                  onChange={(bracket) => patch(i, { predrawn: { ...d.predrawn!, bracket } })}
+                />
+              )}
               {err && <p className="mt-2 text-sm font-semibold text-red-400">✖ {err}</p>}
               {d.warnings.map((w) => (
                 <p key={w} className="mt-1 text-xs text-amber-300">

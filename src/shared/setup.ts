@@ -57,6 +57,39 @@ const nameKey = (v: string): string =>
 /** Pool letter of "Pool A" (or "A"). */
 export const poolLetter = (name: string): string => (name.trim().match(/([A-Z0-9]+)$/i)?.[1] ?? name).toUpperCase()
 
+/** A bracket slot without an opponent: the fighter goes straight to the next round. */
+export const BYE = 'BYE'
+
+/**
+ * Elimination written slot by slot, top to bottom as on the bracket sheet:
+ * "A1–B2" is a first-round match, a lone "C1" waits for the next round (bye).
+ * Example: "A1, B2–D2, C1, J2" = A1 meets the winner of B2–D2, C1 meets J2.
+ * The number of slots must be 1, 2, 4, 8, 16 or 32.
+ */
+export function parseBracketText(text: string, poolLetters: string[]): [string, string][] | string {
+  const slots = text.split(/[,;\n]+/).map((x) => x.trim()).filter(Boolean)
+  if (!slots.length) return []
+  const n = slots.length
+  if ((n & (n - 1)) !== 0 || n > 32) return `${n} slots: the bracket needs 1, 2, 4, 8, 16 or 32 (count every name or pair between commas).`
+  const pairs: [string, string][] = []
+  for (const slot of slots) {
+    const refs = slot.toUpperCase().split(/\s*(?:[-–—/]|\bVS\b)\s*/).filter(Boolean)
+    if (refs.length < 1 || refs.length > 2) return `"${slot}" is not a place like A1 or a pair like A1–B2.`
+    for (const r of refs) {
+      if (!/^[A-Z0-9]+\d$/.test(r) || !poolLetters.includes(r.slice(0, -1))) return `"${r}": there is no pool ${r.slice(0, -1)}.`
+    }
+    pairs.push([refs[0]!, refs[1] ?? BYE])
+  }
+  const all = pairs.flat().filter((r) => r !== BYE)
+  const twice = all.find((r, i) => all.indexOf(r) !== i)
+  if (twice) return `${twice} is in the bracket twice.`
+  return pairs
+}
+
+/** The same notation back from pairings. */
+export const bracketText = (pairs: [string, string][]): string =>
+  pairs.map(([a, b]) => (b === BYE ? a : a === BYE ? b : `${a}–${b}`)).join(', ')
+
 function validatePredrawn(input: unknown, names: Set<string>): Predrawn | string {
   if (typeof input !== 'object' || input === null) return 'Invalid pre-drawn pools.'
   const p = input as Record<string, unknown>
@@ -86,7 +119,8 @@ function validatePredrawn(input: unknown, names: Set<string>): Predrawn | string
   for (const pair of Array.isArray(p['bracket']) ? (p['bracket'] as unknown[]) : []) {
     if (!Array.isArray(pair) || pair.length !== 2) return 'Invalid bracket pairing.'
     const refs = pair.map((r) => (typeof r === 'string' ? r.trim().toUpperCase() : ''))
-    if (refs.some((r) => !/^[A-Z0-9]+\d$/.test(r) || !letters.has(r.slice(0, -1)))) {
+    if (refs.every((r) => r === BYE)) return 'A bracket pairing needs at least one fighter.'
+    if (refs.some((r) => r !== BYE && (!/^[A-Z0-9]+\d$/.test(r) || !letters.has(r.slice(0, -1))))) {
       return `Bracket pairing ${refs.join(' – ')} refers to a pool that does not exist.`
     }
     bracket.push([refs[0]!, refs[1]!])
@@ -199,7 +233,7 @@ export function validateSetup(input: unknown): TournamentSetup | string {
     // the pool ranking gives the medals, so the top 3 must be free of ties.
     const smallestPool = Math.min(...predrawn.pools.map((p) => p.entrants.length))
     setup.advancePerPool = predrawn.bracket.length
-      ? Math.max(1, ...predrawn.bracket.flat().map((r) => Number(r.slice(-1))))
+      ? Math.max(1, ...predrawn.bracket.flat().filter((r) => r !== BYE).map((r) => Number(r.slice(-1))))
       : Math.max(1, Math.min(predrawn.pools.length === 1 ? 3 : 2, smallestPool - 1))
     return setup
   }

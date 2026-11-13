@@ -82,10 +82,17 @@ export async function importDraw(parent: BrowserWindow | null): Promise<DrawImpo
   const files = await pick(parent, {
     title: 'Import draw files (categories, pools, fight order)',
     properties: ['openFile', 'multiSelections'],
-    filters: [{ name: 'Excel draw sheets', extensions: ['xlsx'] }]
+    filters: [{ name: 'Excel draw sheets', extensions: ['xlsx', 'xls'] }]
   })
   if (!files.length) return null
   if (files.length > MAX_FILES) return { ok: false, error: `Choose at most ${MAX_FILES} files.` }
+  const old = files.filter((f) => extname(f).toLowerCase() !== '.xlsx')
+  if (old.length) {
+    return {
+      ok: false,
+      error: `Old Excel format (.xls): ${old.map((f) => basename(f)).join(', ')}. Open each in Excel → File → Save As → "Excel Workbook (*.xlsx)", then import the .xlsx files.`
+    }
+  }
   try {
     const sheets: SheetCells[] = []
     for (const file of files) {
