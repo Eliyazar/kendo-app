@@ -180,7 +180,13 @@ export interface TieGroup {
  * group that includes a qualifying rank.
  */
 /** Pool places that must be decided: the qualifiers, or 1st–3rd when the pool itself gives the podium. */
-export const placesThatMatter = (t: Tournament): number => (t.bracketPlan?.kind === 'none' ? 3 : t.advancePerPool)
+export const placesThatMatter = (t: Tournament): number => (t.bracketPlan?.kind === 'none' ? 4 : t.advancePerPool)
+
+/**
+ * Medal for a final pool rank when the pool is the whole category: 1st, 2nd and two 3rd places
+ * (ranks 3 and 4), as with the two losing semi-finalists of a bracket. Pools of three have one 3rd.
+ */
+export const medalForRank = (rank: number): 1 | 2 | 3 | null => (rank === 1 ? 1 : rank === 2 ? 2 : rank === 3 || rank === 4 ? 3 : null)
 
 export function unresolvedTies(t: Tournament): TieGroup[] {
   const ties: TieGroup[] = []
@@ -191,6 +197,14 @@ export function unresolvedTies(t: Tournament): TieGroup[] {
     for (const s of computeStandings(t, pool)) {
       if (!s.tiedWith.length || s.rank > placesThatMatter(t) || seen.has(s.entrantId)) continue
       const group = [s.entrantId, ...s.tiedWith]
+      if (t.bracketPlan?.kind === 'none') {
+        // Only a tie that changes a medal needs deciding (e.g. two level on 3rd/4th both get 3rd).
+        const medals = new Set(group.map((_, i) => medalForRank(s.rank + i)))
+        if (medals.size === 1) {
+          group.forEach((id) => seen.add(id))
+          continue
+        }
+      }
       group.forEach((id) => seen.add(id))
       ties.push({ poolId: pool.id, entrantIds: group })
     }

@@ -4,6 +4,7 @@ import { useState } from 'react'
 import type { AdminAction, DrawImportResult } from '@shared/ipc'
 import { competitionFromDrafts, courtsNeeded, draftsFromDraw, type CategoryDraft } from '@shared/draw-setup'
 import { poolLetter, validateSetup } from '@shared/setup'
+import { suggestBracketPairs } from '@shared/bracket'
 import { BracketField } from './BracketField'
 import type { TeamSize } from '@shared/types'
 
@@ -101,7 +102,7 @@ export function DrawImportPanel({ loaded, send, onCancel }: { loaded: Loaded; se
                 <input className={`${small} w-64 font-bold`} value={d.name} onChange={(e) => patch(i, { name: e.target.value })} />
                 <span className="text-sm text-white/60">
                   {d.mode === 'team' ? `${units} teams` : `${units} players`} ·{' '}
-                  {d.predrawn ? `${d.predrawn.pools.length} pool(s) from the file${d.predrawn.pools.length === 1 && !d.predrawn.bracket.length ? ', no elimination (pool ranking = 1st, 2nd, 3rd)' : ''}` : 'pools drawn by the app'}
+                  {d.predrawn ? `${d.predrawn.pools.length} pool(s) from the file${d.predrawn.pools.length === 1 && !d.predrawn.bracket.length ? ', no elimination (pool ranking = 1st, 2nd and two 3rd places)' : ''}` : 'pools drawn by the app'}
                 </span>
               </div>
               <div className="mt-3 flex flex-wrap items-center gap-4 text-sm">
@@ -172,6 +173,10 @@ export function DrawImportPanel({ loaded, send, onCancel }: { loaded: Loaded; se
                 <BracketField
                   value={d.predrawn.bracket}
                   letters={d.predrawn.pools.map((pl) => poolLetter(pl.name))}
+                  suggestion={suggestBracketPairs(
+                    d.predrawn.pools.map((pl) => ({ letter: poolLetter(pl.name), size: pl.entrants.length })),
+                    Math.max(1, Math.min(2, Math.min(...d.predrawn.pools.map((pl) => pl.entrants.length)) - 1))
+                  )}
                   onChange={(bracket) => patch(i, { predrawn: { ...d.predrawn!, bracket } })}
                 />
               )}

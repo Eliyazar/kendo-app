@@ -6,6 +6,7 @@ import type { AdminAction } from '@shared/ipc'
 import { matchLabel } from '@shared/public-view'
 import { MAX_RESERVES, TEAM_POSITIONS, type Id, type Player, type Team, type TeamSize, type Tournament } from '@shared/types'
 import { useConfirm } from './useAdmin'
+import { poolOptions } from '@shared/editing'
 
 type Send = (a: AdminAction) => Promise<boolean>
 
@@ -78,12 +79,15 @@ function AddForm({ t, send, team }: { t: Tournament; send: Send; team: boolean }
   const [members, setMembers] = useState('')
   const [poolId, setPoolId] = useState('')
   if (t.phase !== 'pools') return <p className="px-5 py-3 text-sm text-muted">Late entries are only possible during the pool phase.</p>
+  const options = poolOptions(t, dojo, country)
+  const best = options[0]
+  const chosen = options.find((o) => o.poolId === (poolId || best?.poolId))
   const submit = async () => {
     const entrant = {
       name,
       dojo,
       country,
-      ...(poolId ? { poolId } : {}),
+      ...((poolId || best?.poolId) ? { poolId: poolId || best!.poolId } : {}),
       ...(team ? { members: members.split('\n').map((m) => m.trim()).filter(Boolean).map((m) => ({ name: m })) } : {})
     }
     if (await send({ type: 'ADD_ENTRANT', entrant, categoryId: t.id })) {
@@ -107,14 +111,22 @@ function AddForm({ t, send, team }: { t: Tournament; send: Send; team: boolean }
           onChange={(e) => setMembers(e.target.value)}
         />
       )}
-      <select className={box} value={poolId} onChange={(e) => setPoolId(e.target.value)}>
-        <option value="">Smallest pool</option>
-        {t.pools.map((p) => (
-          <option key={p.id} value={p.id}>
-            {p.name}
-          </option>
-        ))}
-      </select>
+      <label className="flex flex-col">
+        <select className={box} value={poolId} onChange={(e) => setPoolId(e.target.value)}>
+          <option value="">Best fit: {best?.name ?? '—'}</option>
+          {options.map((o) => (
+            <option key={o.poolId} value={o.poolId}>
+              {o.name} — {o.note}
+              {o.recommended ? ' (recommended)' : ''}
+            </option>
+          ))}
+        </select>
+        {chosen && (
+          <span className="mt-1 max-w-72 text-xs text-muted">
+            {chosen.name}: {chosen.note}. Adds {chosen.newMatches} {chosen.newMatches === 1 ? 'match' : 'matches'}, fought right after the pool's other matches.
+          </span>
+        )}
+      </label>
       <button disabled={!name.trim()} onClick={submit} className="rounded-lg bg-emerald-600 px-4 py-2 font-bold hover:bg-emerald-500 disabled:opacity-30">
         Add {team ? 'team' : 'participant'}
       </button>

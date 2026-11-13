@@ -217,3 +217,24 @@ export function buildBracket(t: Tournament): Tournament {
   const seeds = assignSeeds(qs, size)
   return makeBracket(t, seedOrder(size).map((seed) => seeds.get(seed) ?? null))
 }
+
+/**
+ * The standard elimination for these pools, written slot by slot (see parseBracketText):
+ * pool winners seeded apart, a second never meets its own pool winner before the final,
+ * byes where the count is not a power of two. `pools` = letter and size of each pool.
+ */
+export function suggestBracketPairs(pools: { letter: string; size: number }[], advance: number): [string, string][] {
+  const qs: Qualifier[] = []
+  for (let place = 1; place <= advance; place++) {
+    pools.forEach((p, poolIndex) => {
+      if (p.size >= place) qs.push({ entrantId: `${p.letter}${place}`, poolIndex, place })
+    })
+  }
+  if (qs.length < 2) return []
+  const size = nextPow2(qs.length)
+  const seeds = assignSeeds(qs, size)
+  const slots = seedOrder(size).map((seed) => seeds.get(seed) ?? 'BYE')
+  const pairs: [string, string][] = []
+  for (let i = 0; i < slots.length; i += 2) pairs.push([slots[i]!, slots[i + 1]!])
+  return pairs
+}

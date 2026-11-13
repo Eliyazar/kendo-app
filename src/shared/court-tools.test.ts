@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { onCourt, peopleIn, waitingOn } from './competition'
 import { helpOptions } from './court-tools'
+import { podium } from './published'
 import { computeStandings, unresolvedTies } from './standings'
 import type { AdminAction, CompetitionSetup } from './ipc'
 import { initialState, reduceApp } from './reducer'
@@ -360,5 +361,25 @@ describe('tie-breakers right after their own pool', () => {
     expect(comp(s).categories[0]!.pools.find((p) => p.id === next.poolId)!.name).toBe('A')
     // Pool B has not started yet.
     expect(Object.values(comp(s).categories[0]!.matches).filter((m) => m.kind === 'pool' && m.status === 'completed')).toHaveLength(3)
+  })
+})
+
+describe('a fighter who does not come', () => {
+  it('removed from a group of three after the start: the other two fight one match for 1st and 2nd', () => {
+    let s = reduceApp(initialState(), {
+      type: 'CREATE_COMPETITION',
+      setup: { name: 'Cup', date: '2026-11-07', courts: 1, categories: [category('Trio', people(['Ana', 'Bea', 'Cia']), { predrawn: { pools: [{ name: 'A', entrants: ['Ana', 'Bea', 'Cia'], matches: [['Ana', 'Cia'], ['Bea', 'Cia'], ['Ana', 'Bea']] }], bracket: [] } })] }
+    }, (clock += 1000)).state
+    const A = court(s, 0)
+    s = win(s, A, 'aka') // Ana beats Cia
+    const t0 = comp(s).categories[0]!
+    const cia = Object.values(t0.players).find((p) => p.name === 'Cia')!.id
+    s = act(s, { type: 'REMOVE_ENTRANT', entrantId: cia })
+    const t1 = comp(s).categories[0]!
+    expect(Object.values(t1.matches).filter((m) => m.kind === 'pool')).toHaveLength(1)
+    s = win(s, A, 'shiro') // Bea beats Ana
+    const t = comp(s).categories[0]!
+    expect(t.phase).toBe('finished')
+    expect(podium(t).map((p) => [p.place, t.players[p.entrantId]!.name])).toEqual([[1, 'Bea'], [2, 'Ana']])
   })
 })

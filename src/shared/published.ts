@@ -6,10 +6,10 @@
 // so opponents cannot adapt. It appears once the encounter's first bout starts.
 
 import { describeEntrant, matchLabel, positionLabel, toPublicView, type PodiumView, type PublicView } from './public-view'
-import { encounterOpen, entrantOf, lineupOf, tallyEncounter } from './encounters'
+import { encounterOpen, entrantOf, isWithdrawn, lineupOf, tallyEncounter } from './encounters'
 import { markLetter } from './marks'
 import { computeScore } from './match-engine'
-import { computeStandings } from './standings'
+import { computeStandings, medalForRank } from './standings'
 import type { AppState, Competition, Id, Match, MatchDecision, MatchKind, MatchStatus, Side, Tournament, TournamentMode, TournamentPhase } from './types'
 
 export const PUBLISHED_VERSION = 2
@@ -207,12 +207,12 @@ function pubSide(t: Tournament, m: Match, side: Side, hidden: boolean): PubSide 
 
 /** Final standings: champion, runner-up, and both semi-final losers. */
 export function podium(t: Tournament): { place: 1 | 2 | 3; entrantId: Id }[] {
-  // No elimination (single pool): the pool ranking gives 1st, 2nd and 3rd.
+  // No elimination (single pool): the pool ranking gives 1st, 2nd and two 3rd places (ranks 3 and 4).
   if (t.bracketPlan?.kind === 'none') {
     if (t.phase !== 'finished' || !t.pools[0]) return []
     return computeStandings(t, t.pools[0])
-      .filter((r) => r.rank <= 3)
-      .map((r) => ({ place: r.rank as 1 | 2 | 3, entrantId: r.entrantId }))
+      .filter((r) => !isWithdrawn(t, r.entrantId) && medalForRank(r.rank))
+      .map((r) => ({ place: medalForRank(r.rank)!, entrantId: r.entrantId }))
   }
   const b = t.bracket
   if (!b) return []

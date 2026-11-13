@@ -115,12 +115,55 @@ export function addEntrant(t: Tournament, input: EntrantInput): Tournament {
   const courtId = Object.values(t.matches).find((m) => m.poolId === pool.id)?.courtId ?? courtFor(t, poolIndex)
   const opponents = active(pool.entrantIds)
   t = { ...t, pools: t.pools.map((p) => (p.id === pool.id ? { ...p, entrantIds: [...p.entrantIds, entrantId] } : p)) }
+  // The new matches are fought with the pool: right after its last match in the order.
+  let after = [...t.matchQueue].reverse().find((id) => t.matches[id]?.poolId === pool.id)
   opponents.forEach((other, i) => {
     const [a, b] = i % 2 ? [other, entrantId] : [entrantId, other]
     const s = createMeeting(t, 'pool', a, b, { poolId: pool.id, courtId })
-    t = enqueue(s.t, s.boutIds)
+    t = enqueue(s.t, s.boutIds, after)
+    after = s.boutIds[s.boutIds.length - 1] ?? after
   })
   return fillCourts(t)
+}
+
+export interface PoolOption {
+  poolId: Id
+  name: string
+  /** Fighters (or teams) in the pool now. */
+  size: number
+  /** Matches already fought in the pool. */
+  played: number
+  /** Matches the newcomer adds. */
+  newMatches: number
+  /** Same club (or team name) already in the pool. */
+  sameClub: string[]
+  recommended: boolean
+  note: string
+}
+
+/**
+ * Where a late entry fits best: the smallest pool, preferably one that has not finished,
+ * and without a club mate. The first option is the recommendation.
+ */
+export function poolOptions(t: Tournament, dojo = '', country = ''): PoolOption[] {
+  const key = (s: string) => s.trim().toLowerCase()
+  const options = t.pools.map((p) => {
+    const ids = p.entrantIds.filter((id) => !isWithdrawn(t, id))
+    const who = (id: Id) => t.teams[id] ?? t.players[id]
+    const sameClub = dojo.trim() ? ids.filter((id) => key(who(id)?.dojo ?? '') === key(dojo)).map((id) => who(id)?.name ?? '') : []
+    const sameCountry = country.trim() ? ids.filter((id) => key(who(id)?.country ?? '') === key(country)).length : 0
+    const pm = Object.values(t.matches).filter((m) => m.poolId === p.id && m.kind === 'pool')
+    const played = pm.filter((m) => m.status === 'completed').length
+    const finished = pm.length > 0 && played === pm.length
+    // Lower is better: size first, then finished pools, club mates, compatriots.
+    const score = ids.length * 100 + (finished ? 50 : 0) + sameClub.length * 30 + sameCountry * 5
+    const notes = [`${ids.length} ${t.mode === 'team' ? 'teams' : 'fighters'}`, `${played}/${pm.length} played`]
+    if (finished) notes.push('already finished')
+    if (sameClub.length) notes.push(`same club: ${sameClub.join(', ')}`)
+    return { poolId: p.id, name: p.name, size: ids.length, played, newMatches: ids.length, sameClub, recommended: false, note: notes.join(' · '), score }
+  })
+  options.sort((a, b) => a.score - b.score || a.name.localeCompare(b.name))
+  return options.map(({ score: _s, ...o }, i) => ({ ...o, recommended: i === 0 }))
 }
 
 /** Remove meetings that never started (and their bouts) from the tournament. */

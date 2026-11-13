@@ -171,7 +171,7 @@ export function PoolsView({ t, send, manualReview = false }: { t: Tournament; se
             {t.phase !== 'pools'
               ? 'Pools are locked. Standings are final.'
               : complete
-                ? `All pool matches are approved. ${t.bracketPlan?.kind === 'none' ? 'The pool ranking gives 1st, 2nd and 3rd place.' : `Top ${t.advancePerPool} of each pool qualify.`} Ranking: wins › ${t.mode === 'team' ? 'bouts won › ' : ''}playoff wins › ippons scored › ippons conceded › head-to-head.`
+                ? `All pool matches are approved. ${t.bracketPlan?.kind === 'none' ? 'The pool ranking gives 1st, 2nd and two 3rd places (3rd and 4th).' : `Top ${t.advancePerPool} of each pool qualify.`} Ranking: wins › ${t.mode === 'team' ? 'bouts won › ' : ''}playoff wins › ippons scored › ippons conceded › head-to-head.`
                 : `${done} of ${poolMatches.length} pool ${t.mode === 'team' ? 'bouts' : 'matches'} approved.${manualReview ? '' : ' The eliminations start by themselves after the last one.'}`}
           </p>
         </div>

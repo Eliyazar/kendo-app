@@ -6,7 +6,7 @@ import { bracketText, parseBracketText } from '@shared/setup'
 const small = 'rounded-md border border-white/10 bg-neutral-800 px-2 py-1 text-sm'
 
 /** Elimination written slot by slot as on the bracket sheet; empty = the app draws it. */
-export function BracketField({ value, letters, onChange }: { value: [string, string][]; letters: string[]; onChange: (v: [string, string][]) => void }) {
+export function BracketField({ value, letters, onChange, suggestion }: { value: [string, string][]; letters: string[]; onChange: (v: [string, string][]) => void; suggestion?: [string, string][] }) {
   const [text, setText] = useState(bracketText(value))
   useEffect(() => setText(bracketText(value)), [value])
   const [error, setError] = useState<string | null>(null)
@@ -29,6 +29,20 @@ export function BracketField({ value, letters, onChange }: { value: [string, str
           onBlur={commit}
           onKeyDown={(e) => e.key === 'Enter' && commit()}
         />
+        {suggestion && suggestion.length > 0 && (
+          <button
+            type="button"
+            onClick={() => {
+              setError(null)
+              setText(bracketText(suggestion))
+              onChange(suggestion)
+            }}
+            className="shrink-0 rounded-md bg-neutral-700 px-3 py-1 text-xs font-bold hover:bg-neutral-600"
+            title={`Standard pairing for these pools: ${bracketText(suggestion)}`}
+          >
+            Suggest
+          </button>
+        )}
       </label>
       <p className={`mt-1 text-xs ${error ? 'text-red-400' : 'text-white/40'}`}>
         {error ??

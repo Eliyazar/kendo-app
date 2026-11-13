@@ -135,7 +135,7 @@ describe('pre-drawn categories (draw sheets)', () => {
     expect([first[1]!.akaEntrantId, first[1]!.shiroEntrantId]).toEqual([placeOf(1, 2), placeOf(0, 2)])
   })
 
-  it('a single pool without bracket: the pool ranking gives 1st, 2nd, 3rd', () => {
+  it('a single pool without bracket: the pool ranking gives 1st, 2nd and two 3rd places', () => {
     let s = create({
       name: 'X',
       date: '2026-11-07',
@@ -154,7 +154,8 @@ describe('pre-drawn categories (draw sheets)', () => {
     expect(podium(cat(s, 0)).map((p) => [p.place, cat(s, 0).players[p.entrantId]!.name])).toEqual([
       [1, 'K'],
       [2, 'L'],
-      [3, 'M']
+      [3, 'M'],
+      [3, 'N']
     ])
     expect(toPublicView(s, A).champion?.name).toBe('K')
   })
@@ -298,5 +299,18 @@ describe('bracket written slot by slot', () => {
     expect(b.rounds).toBe(3)
     expect(r1.filter((n) => n.matchId)).toHaveLength(2)
     expect(r1.filter((n) => n.winnerEntrantId && !n.matchId)).toHaveLength(2)
+  })
+})
+
+describe('suggested bracket', () => {
+  it('two pools: winners meet seconds of the other pool; eleven pools get byes', async () => {
+    const { suggestBracketPairs } = await import('./bracket')
+    const { bracketText } = await import('./setup')
+    expect(bracketText(suggestBracketPairs([{ letter: 'A', size: 3 }, { letter: 'B', size: 3 }], 2))).toBe('A1–B2, B1–A2')
+    const four = suggestBracketPairs(['A', 'B', 'C', 'D'].map((letter) => ({ letter, size: 3 })), 2)
+    for (const [a, b] of four) expect(a.slice(0, 1)).not.toBe(b.slice(0, 1))
+    const eleven = suggestBracketPairs('ABCDEFGHIJK'.split('').map((letter) => ({ letter, size: 3 })), 2)
+    expect(eleven).toHaveLength(16)
+    expect(eleven.flat().filter((r) => r === 'BYE')).toHaveLength(10)
   })
 })
