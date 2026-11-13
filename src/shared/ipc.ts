@@ -220,7 +220,7 @@ export interface CourtLink {
   error?: string
 }
 
-export type ExportResult = { ok: true; folder: string; files: number } | { ok: false; error: string }
+export type ExportResult = { ok: true; folder: string; files: number; /** e.g. a file was open and saved under another name */ note?: string } | { ok: false; error: string }
 
 /** Full state for the Admin window, plus the main-process clock for timer interpolation. */
 export interface AdminSnapshot {

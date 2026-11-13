@@ -217,7 +217,7 @@ export class AppContext {
       if (c.phase !== 'finished' || before === undefined || before === 'finished') continue
       void exportResults(this.store.getState(), this.publisher.getStatus().publicUrl, c.id).then((r) =>
         r.ok
-          ? this.notice(`${c.name} finished — results and diplomas saved (${r.files} files).`, 'info', r.folder)
+          ? this.notice(`${c.name} finished — results and diplomas saved (${r.files} files).${r.note ? ` ${r.note}` : ''}`, r.note ? 'warn' : 'info', r.folder)
           : this.notice(`Saving results of ${c.name} failed: ${r.error}`, 'warn')
       )
     }

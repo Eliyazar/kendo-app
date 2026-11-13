@@ -74,7 +74,7 @@ export function SettingsView({ snap, save }: { snap: AdminSnapshot; save: Save }
     const r = await window.kendoAdmin.exportResults()
     setExporting(false)
     if (r.ok) {
-      setExportMsg(`Saved ${r.files} files.`)
+      setExportMsg(`Saved ${r.files} files.${r.note ? ` ${r.note}` : ''}`)
       void window.kendoAdmin.openFolder(r.folder)
     } else setExportMsg(r.error)
   }
