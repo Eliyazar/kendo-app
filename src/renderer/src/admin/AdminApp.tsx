@@ -214,6 +214,7 @@ export function AdminApp() {
   const [tab, setTab] = useState<Tab>('match')
   const [recoveryDismissed, setRecoveryDismissed] = useState(false)
   const [closeArmed, confirmClose] = useConfirm(4000)
+  const [restartArmed, confirmRestart] = useConfirm(5000)
   const fire = (a: AdminAction): void => void send(a)
 
   const comp = snap?.state.competition ?? null
@@ -281,6 +282,15 @@ export function AdminApp() {
               ✕
             </button>
           </div>
+        )}
+        {comp && !client && (
+          <button
+            onClick={() => confirmRestart(() => fire({ type: 'RESTART_COMPETITION' }))}
+            className={`shrink-0 rounded-lg px-3 py-1.5 text-sm font-semibold whitespace-nowrap ${restartArmed ? 'bg-red-600' : 'text-muted hover:bg-neutral-800 hover:text-white'}`}
+            title="Same groups and fight order from the start: every result is deleted (the current state is archived first)"
+          >
+            {restartArmed ? 'Click again: delete all results' : 'Restart'}
+          </button>
         )}
         {comp && !client && (
           <button

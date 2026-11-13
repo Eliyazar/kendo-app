@@ -273,6 +273,14 @@ export function SettingsView({ snap, save }: { snap: AdminSnapshot; save: Save }
           Group sheets to print (PDF)…
         </button>
         {exportMsg && <p className="text-sm text-muted">{exportMsg}</p>}
+        <div className="flex items-center gap-3 rounded-xl bg-surface-2 px-3 py-2 text-sm">
+          <span className="min-w-0 flex-1 truncate text-muted" title={snap.resultsFolder}>
+            Saved in: <span className="text-white">{snap.resultsFolder}</span>
+          </span>
+          <button onClick={() => void window.kendoAdmin.openFolder(snap.resultsFolder)} className="shrink-0 rounded-lg bg-neutral-700 px-3 py-1.5 font-bold hover:bg-neutral-600">
+            Open folder
+          </button>
+        </div>
         <div className="mt-2 rounded-xl border border-line p-3">
           <h4 className="text-sm font-bold">Diploma design</h4>
           <p className="mt-1 text-sm text-muted">

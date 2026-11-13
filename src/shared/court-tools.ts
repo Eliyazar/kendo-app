@@ -3,7 +3,7 @@
 
 import { onCourt, peopleIn } from './competition'
 import { fillCourts } from './courts'
-import { createMeeting, enqueue } from './encounters'
+import { createMeeting, enqueue, setLineup } from './encounters'
 import { kiken, opponent, RuleError } from './match-engine'
 import { afterMatchCompleted } from './progress'
 import type { Competition, Id, Match, Side, TeamMatch, Tournament } from './types'
@@ -247,4 +247,56 @@ export const canMove = (t: Tournament, m: Match): { up: boolean; down: boolean }
   const units = openUnitsOnCourt(t, m.courtId)
   const i = units.indexOf(unitKey(m))
   return { up: i > 0, down: i >= 0 && i < units.length - 1 }
+}
+
+// ---------------------------------------------------------------------------
+// Restart: same draw, every result cleared
+// ---------------------------------------------------------------------------
+
+/**
+ * Back to the start of the category with the same pools and fight order: every pool match
+ * is unplayed again, added matches and the bracket are gone, withdrawals are undone.
+ * Names, countries, teams and team orders stay as they were edited.
+ */
+export function restartCategory(t: Tournament): Tournament {
+  const keep = (m: Match) => m.kind === 'pool'
+  const matches: Tournament['matches'] = {}
+  for (const m of Object.values(t.matches)) {
+    if (!keep(m)) continue
+    const { endReason: _e, result: _r, enchoFromEvent: _f, ...rest } = m
+    matches[m.id] = { ...rest, status: 'scheduled', events: [], encho: false, timer: { mode: 'countdown', durationMs: m.config.durationMs, elapsedMs: 0, runningSince: null } }
+  }
+  const teamMatches: Tournament['teamMatches'] = {}
+  for (const tm of Object.values(t.teamMatches)) {
+    if (tm.kind !== 'pool') continue
+    const { result: _r, daihyoMatchId: _d, lineupSet: _l, ...rest } = tm
+    teamMatches[tm.id] = { ...rest, status: 'scheduled', boutIds: tm.boutIds.filter((id) => matches[id]) }
+  }
+  const players = Object.fromEntries(Object.entries(t.players).map(([id, p]) => {
+    const { withdrawn: _w, ...rest } = p
+    return [id, rest]
+  }))
+  const teams = Object.fromEntries(Object.entries(t.teams).map(([id, team]) => {
+    const { withdrawn: _w, ...rest } = team
+    return [id, rest]
+  }))
+  let next: Tournament = {
+    ...t,
+    bracket: null,
+    phase: 'pools',
+    players,
+    teams,
+    matches,
+    teamMatches,
+    matchQueue: t.matchQueue.filter((id) => matches[id]),
+    courts: t.courts.map((c) => ({ ...c, activeMatchId: null }))
+  }
+  // Team encounters fight in each team's default order again.
+  for (const tm of Object.values(next.teamMatches)) {
+    for (const side of ['aka', 'shiro'] as const) {
+      const team = next.teams[side === 'aka' ? tm.akaTeamId : tm.shiroTeamId]
+      if (team) next = setLineup(next, tm.id, side, team.order, false)
+    }
+  }
+  return fillCourts(next)
 }

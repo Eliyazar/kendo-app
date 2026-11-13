@@ -72,7 +72,7 @@ export function MatchQueue({
         )}
       </div>
       <ol className="flex-1 overflow-y-auto">
-        {comp.categories.map((t) => {
+        {comp.categories.map((t, ci) => {
           const ids = t.matchQueue.filter((id) => {
             const m = t.matches[id]
             return m && (!multi || allCourts || m.courtId === courtId)
@@ -82,9 +82,25 @@ export function MatchQueue({
           return (
             <li key={t.id}>
               {multiCat && (
-                <div className="sticky top-0 z-10 flex justify-between border-b border-line bg-surface-2 px-4 py-1.5 text-xs font-bold tracking-wider uppercase">
-                  <span className="truncate">{t.name}</span>
+                <div className="sticky top-0 z-10 flex items-center gap-2 border-b border-line bg-surface-2 px-4 py-1.5 text-xs font-bold tracking-wider uppercase">
+                  <span className="flex-1 truncate">{t.name}</span>
                   <span className="text-muted">{left ? `${left} left` : 'done'}</span>
+                  <button
+                    disabled={ci === 0}
+                    onClick={() => void send({ type: 'MOVE_CATEGORY', categoryId: t.id, direction: 'up' })}
+                    className="rounded px-1 text-white/60 hover:bg-white/10 hover:text-white disabled:opacity-20"
+                    title="Fight this category earlier"
+                  >
+                    ▲
+                  </button>
+                  <button
+                    disabled={ci === comp.categories.length - 1}
+                    onClick={() => void send({ type: 'MOVE_CATEGORY', categoryId: t.id, direction: 'down' })}
+                    className="rounded px-1 text-white/60 hover:bg-white/10 hover:text-white disabled:opacity-20"
+                    title="Fight this category later"
+                  >
+                    ▼
+                  </button>
                 </div>
               )}
               <ol>

@@ -62,7 +62,7 @@ export function documentsBase(): string {
   return process.env['KENDO_PROFILE_DIR'] ? path.join(app.getPath('userData'), 'exports') : path.join(app.getPath('documents'), 'Kendo Tournament Manager')
 }
 
-function competitionFolder(state: AppState): string {
+export function competitionFolder(state: AppState): string {
   return path.join(documentsBase(), safe(`${state.competition!.date} ${state.competition!.name}`))
 }
 

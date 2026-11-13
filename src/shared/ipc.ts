@@ -89,6 +89,10 @@ export type AdminAction =
   | { type: 'CREATE_TOURNAMENT'; setup: TournamentSetup }
   | { type: 'CREATE_COMPETITION'; setup: CompetitionSetup }
   | { type: 'RESET_TOURNAMENT' }
+  /** Same draw from the start: every result is cleared (the current state is archived first). */
+  | { type: 'RESTART_COMPETITION' }
+  /** Move a category earlier or later in the order the courts fight them. */
+  | { type: 'MOVE_CATEGORY'; categoryId: string; direction: 'up' | 'down' }
   | { type: 'GENERATE_TIE_BREAKER'; poolId: string; entrantIds: string[] }
   | { type: 'LOCK_POOLS'; categoryId?: string }
   | { type: 'ADD_ENTRANT'; entrant: EntrantInput; categoryId?: string }
@@ -134,6 +138,8 @@ export const ADMIN_ACTION_TYPES: readonly AdminActionType[] = [
   'CREATE_TOURNAMENT',
   'CREATE_COMPETITION',
   'RESET_TOURNAMENT',
+  'RESTART_COMPETITION',
+  'MOVE_CATEGORY',
   'GENERATE_TIE_BREAKER',
   'LOCK_POOLS',
   'ADD_ENTRANT',
@@ -227,6 +233,8 @@ export interface AdminSnapshot {
   publicView: PublicView
   /** Diplomas: the organiser's PDF design is set, and the font file used (null = none found). */
   diploma: { template: boolean; font: string | null }
+  /** Where results, diplomas, poster and group sheets are saved for this competition. */
+  resultsFolder: string
   /** Automatic backups (host). */
   backup: { folder: string; lastAt: number | null; error: string | null }
 }

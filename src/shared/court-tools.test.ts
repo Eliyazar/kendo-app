@@ -214,3 +214,43 @@ describe('flexible pools', () => {
     expect(() => tryAct(s, { type: 'MOVE_IN_QUEUE', matchId: q[2]!, direction: 'down' })).toThrow()
   })
 })
+
+describe('restart and category order', () => {
+  it('restart: same pools and fight order, every result cleared, edits kept', () => {
+    let s = create({ name: 'Cup', date: '2026-11-07', courts: 1, categories: [category('Solo', people(['P1', 'P2', 'P3', 'P4']), { poolSize: 2, advancePerPool: 1 })] })
+    const A = court(s, 0)
+    const before = comp(s).categories[0]!
+    const poolQueue = [...before.matchQueue]
+    s = act(s, { type: 'EDIT_PLAYER', playerId: Object.keys(before.players)[0]!, patch: { name: 'Renamed', country: 'BUL' } })
+    for (let i = 0; i < 2; i++) s = win(s, A)
+    s = act(s, { type: 'LOCK_POOLS', categoryId: before.id })
+    s = win(s, A)
+    expect(comp(s).categories[0]!.phase).toBe('finished')
+    s = act(s, { type: 'RESTART_COMPETITION' })
+    const t = comp(s).categories[0]!
+    expect(t.phase).toBe('pools')
+    expect(t.bracket).toBeNull()
+    expect(t.matchQueue).toEqual(poolQueue)
+    expect(Object.values(t.matches).every((m) => m.status === 'scheduled' && !m.result && m.events.length === 0)).toBe(true)
+    expect(Object.values(t.players).some((p) => p.name === 'Renamed' && p.country === 'BUL')).toBe(true)
+    expect(shown(s, A)!.id).toBe(poolQueue[0])
+  })
+
+  it('moving a category up makes the court fight it first (a started match is not interrupted)', () => {
+    let s = create({
+      name: 'Cup',
+      date: '2026-11-07',
+      courts: 1,
+      categories: [category('First', people(['A1', 'A2', 'A3'])), category('Second', people(['B1', 'B2', 'B3']))]
+    })
+    const A = court(s, 0)
+    const [first, second] = comp(s).categories
+    expect(onCourt(comp(s), A)!.category.id).toBe(first!.id)
+    s = act(s, { type: 'MOVE_CATEGORY', categoryId: second!.id, direction: 'up' })
+    expect(comp(s).categories.map((c) => c.name)).toEqual(['Second', 'First'])
+    expect(onCourt(comp(s), A)!.category.id).toBe(second!.id)
+    s = act(s, { type: 'TIMER_START', courtId: A })
+    s = act(s, { type: 'MOVE_CATEGORY', categoryId: first!.id, direction: 'up' })
+    expect(onCourt(comp(s), A)!.category.id).toBe(second!.id)
+  })
+})

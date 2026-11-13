@@ -12,7 +12,7 @@ import type { AppState } from '@shared/types'
 import { Backups, readBackup } from './backup'
 import { CourtClient } from './court-client'
 import { findDiplomaFont, hasTemplate } from './diploma-pdf'
-import { documentsBase, exportResults } from './export'
+import { competitionFolder, documentsBase, exportResults } from './export'
 import type { StateFile } from './persistence'
 import { Publisher } from './publisher'
 import { courtLetter, lanAddresses, LocalServer } from './server'
@@ -252,6 +252,7 @@ export class AppContext {
       devMode: this.devMode,
       publicView: this.publicView(),
       diploma: this.diploma,
+      resultsFolder: state.competition ? competitionFolder(state) : documentsBase(),
       backup: { folder: path.join(documentsBase(), 'backups'), lastAt: this.backups.lastAt, error: this.backups.lastError }
     }
   }

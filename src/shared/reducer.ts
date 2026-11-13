@@ -6,7 +6,7 @@
 
 import { buildBracket } from './bracket'
 import { arrangeCourts, categoryById, categoryOwning, fightingElsewhere, onCourt, withCategory } from './competition'
-import { addPlayoff, kikenOnCourt, moveInQueue, postpone, removeExtraMatch, swapSides, takePool } from './court-tools'
+import { addPlayoff, kikenOnCourt, moveInQueue, postpone, removeExtraMatch, restartCategory, swapSides, takePool } from './court-tools'
 import { activeMatchOn, courtOf, makeCourts, withCourt } from './courts'
 import { createDemoSetup } from './demo'
 import {
@@ -90,7 +90,7 @@ function tickCategory(t: Tournament, now: number): Tournament {
 // Category level
 // ---------------------------------------------------------------------------
 
-type CategoryAction = Exclude<AppAction, { type: 'TICK' | 'DEV_LOAD_DEMO' | 'CREATE_TOURNAMENT' | 'CREATE_COMPETITION' | 'RESET_TOURNAMENT' }>
+type CategoryAction = Exclude<AppAction, { type: 'TICK' | 'DEV_LOAD_DEMO' | 'CREATE_TOURNAMENT' | 'CREATE_COMPETITION' | 'RESET_TOURNAMENT' | 'RESTART_COMPETITION' | 'MOVE_CATEGORY' }>
 
 export function reduceCategory(t: Tournament, action: CategoryAction, now: number): Tournament {
   switch (action.type) {
@@ -320,6 +320,27 @@ export function reduceApp(state: AppState, action: AppAction, now: number): AppU
       const spec = validateCompetition(action.setup satisfies CompetitionSetup)
       if (typeof spec === 'string') throw new RuleError(spec)
       return commit(newCompetition(spec, now))
+    }
+
+    case 'RESTART_COMPETITION': {
+      if (!comp) return { state, changed: false }
+      if (comp.categories.some(runningClock)) throw new RuleError('Pause every clock first.')
+      return commit({
+        ...comp,
+        categories: comp.categories.map(restartCategory),
+        courts: comp.courts.map(({ id, name }) => ({ id, name, categoryId: null }))
+      })
+    }
+
+    case 'MOVE_CATEGORY': {
+      if (!comp) throw new RuleError('No competition loaded.')
+      const i = comp.categories.findIndex((c) => c.id === action.categoryId)
+      if (i < 0) throw new RuleError('Unknown category.')
+      const j = action.direction === 'up' ? i - 1 : i + 1
+      if (j < 0 || j >= comp.categories.length) return { state, changed: false }
+      const categories = [...comp.categories]
+      ;[categories[i], categories[j]] = [categories[j]!, categories[i]!]
+      return commit({ ...comp, categories })
     }
 
     case 'RESET_TOURNAMENT': {

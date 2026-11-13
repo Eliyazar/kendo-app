@@ -8,7 +8,7 @@ import { ADMIN_ACTION_TYPES, IPC, type AdminAction, type AdminSnapshot, type Dis
 import type { PublicView } from '@shared/public-view'
 import type { AppContext } from './context'
 import { TEMPLATE_FILE } from './diploma-pdf'
-import { exportDiplomaTest, exportGroupSheets, exportPoster, exportResults } from './export'
+import { documentsBase, exportDiplomaTest, exportGroupSheets, exportPoster, exportResults } from './export'
 import { importDraw, importParticipants } from './import'
 import { mergeSettings } from './settings'
 
@@ -28,6 +28,7 @@ const optCourt = (a: Record<string, unknown>): boolean => a['courtId'] === undef
 const STRING_FIELDS: Partial<Record<AdminAction['type'], string[]>> = {
   LOAD_MATCH: ['matchId'],
   TAKE_POOL: ['poolId'],
+  MOVE_CATEGORY: ['categoryId'],
   ADD_PLAYOFF: ['poolId'],
   REMOVE_MATCH: ['matchId'],
   MOVE_IN_QUEUE: ['matchId'],
@@ -70,6 +71,7 @@ export function parseAdminAction(input: unknown, allowDev: boolean): AdminAction
   if (type === 'DEV_LOAD_DEMO' && !allowDev) return null
   if (type === 'ADD_IPPON' && !(SIDES.includes(a['side'] as string) && TECHNIQUES.includes(a['technique'] as string))) return null
   if ((type === 'ADD_HANSOKU' || type === 'FUSEN_GACHI' || type === 'SET_REPRESENTATIVE' || type === 'KIKEN') && !SIDES.includes(a['side'] as string)) return null
+  if (type === 'MOVE_CATEGORY' && a['direction'] !== 'up' && a['direction'] !== 'down') return null
   if (type === 'MOVE_IN_QUEUE' && a['direction'] !== 'up' && a['direction'] !== 'down') return null
   if (type === 'ADD_PLAYOFF' && a['encho'] !== undefined && typeof a['encho'] !== 'boolean') return null
   if (type === 'ADD_PLAYOFF' && !(Array.isArray(a['entrantIds']) && a['entrantIds'].length === 2 && a['entrantIds'].every(str))) return null
@@ -177,7 +179,10 @@ export function registerIpc(ctx: AppContext, windows: WindowRefs): void {
   )
 
   ipcMain.handle(IPC.adminOpenFolder, async (e, folder: unknown): Promise<void> => {
-    if (fromAdmin(e) && typeof folder === 'string') await shell.openPath(folder)
+    if (!fromAdmin(e) || typeof folder !== 'string') return
+    // The competition folder exists only after the first export: create it inside our own folder.
+    if (path.resolve(folder).startsWith(path.resolve(documentsBase()))) await fs.mkdir(folder, { recursive: true }).catch(() => undefined)
+    await shell.openPath(folder)
   })
 
   ipcMain.handle(IPC.publicGetView, (e): PublicView | null => (fromPublic(e) || fromAdmin(e) ? ctx.publicView() : null))
