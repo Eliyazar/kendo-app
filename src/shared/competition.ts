@@ -3,7 +3,7 @@
 // interrupted; otherwise a court takes the first category (in competition
 // order) that has a match for it, unless the operator picked one by hand.
 
-import { fillCourts, nextScheduledOn } from './courts'
+import { fillCourts } from './courts'
 import type { Competition, CourtSlot, Id, Match, Tournament } from './types'
 
 export function categoryById(comp: Competition, id: Id): Tournament | undefined {
@@ -193,12 +193,17 @@ export function eliminationsNext(comp: Competition, courtId: Id): Tournament | n
 }
 
 /** Next match on a court after the current one: this category first, then the next category with work there. */
-export function nextOnCourt(comp: Competition, courtId: Id): { category: Tournament; match: Match } | null {
+export function nextOnCourt(comp: Competition, courtId: Id, skipTeamMatchId?: Id): { category: Tournament; match: Match } | null {
   const slot = comp.courts.find((c) => c.id === courtId)
   const order = [...comp.categories].sort((a, b) => (a.id === slot?.categoryId ? -1 : b.id === slot?.categoryId ? 1 : 0))
   for (const category of order) {
-    const match = nextScheduledOn(category, courtId)
-    if (match) return { category, match }
+    const loaded = new Set(category.courts.map((c) => c.activeMatchId))
+    for (const id of category.matchQueue) {
+      const m = category.matches[id]
+      if (!m || m.courtId !== courtId || m.status !== 'scheduled' || loaded.has(id)) continue
+      if (skipTeamMatchId && m.teamMatchId === skipTeamMatchId) continue
+      return { category, match: m }
+    }
   }
   return null
 }

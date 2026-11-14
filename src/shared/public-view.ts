@@ -6,7 +6,7 @@ import { eliminationsNext, nextOnCourt, onCourt } from './competition'
 import { computeStandings } from './standings'
 import { tallyEncounter } from './encounters'
 import { computeScore, pendingResult, type ScoreMark } from './match-engine'
-import { TEAM_POSITIONS, type AppState, type Competition, type Competitor, type Match, type MatchStatus, type Side, type Tournament } from './types'
+import { TEAM_POSITIONS, type AppState, type Competition, type Competitor, type Match, type MatchDecision, type MatchStatus, type Side, type Tournament } from './types'
 
 /** Who is fighting: name plus dojo (or team) and IOC country code. */
 export interface Person {
@@ -43,6 +43,15 @@ export interface PublicMatch {
   positionLabel: string | null
   /** Where this match sits in the tournament, e.g. "Pool A", "Semi-final", "Tie-breaker". */
   label: string
+  /** How it was decided, once approved. */
+  decision?: MatchDecision
+}
+
+/** A team encounter on the TV: every bout of it, the one being fought included. */
+export interface PublicEncounter {
+  bouts: PublicMatch[]
+  /** The bout on the court now. */
+  currentId: string
 }
 
 export interface PublicMatchup {
@@ -71,6 +80,8 @@ export interface PublicView {
   multiCourt: boolean
   match: PublicMatch | null
   team: PublicTeamScore | null
+  /** Team bouts: the whole encounter (all positions), shown instead of the single match. */
+  encounter?: PublicEncounter | null
   nextMatch: PublicMatchup | null
   /** Shown as "Next" when the pairing is not known yet, e.g. "Eliminations · Men individual". */
   nextNote?: string | null
@@ -143,17 +154,29 @@ export function champion(t: Tournament): Person | null {
 function matchView(t: Tournament, m: Match): PublicMatch {
   const score = computeScore(m.events)
   const over = m.status === 'awaiting-confirmation' || m.status === 'completed'
-  return {
+  const view: PublicMatch = {
     id: m.id,
     status: m.status,
     aka: { ...describeCompetitor(t, m.aka), ...score.aka },
     shiro: { ...describeCompetitor(t, m.shiro), ...score.shiro },
     encho: m.encho,
     timeUp: m.endReason === 'time-up',
-    winner: over ? pendingResult(m).winner : null,
+    // An approved result is final (kiken is not in the events).
+    winner: m.status === 'completed' && m.result ? m.result.winner : over ? pendingResult(m).winner : null,
     positionLabel: positionLabel(t, m),
     label: matchLabel(t, m)
   }
+  if (m.status === 'completed' && m.result) view.decision = m.result.decision
+  return view
+}
+
+/** Every bout of the team encounter `m` belongs to, in position order (daihyo-sen last). */
+function encounterView(t: Tournament, m: Match): PublicEncounter | null {
+  const tm = m.teamMatchId ? t.teamMatches[m.teamMatchId] : undefined
+  if (!tm) return null
+  const ids = [...tm.boutIds, ...(tm.daihyoMatchId ? [tm.daihyoMatchId] : [])]
+  const bouts = ids.map((id) => t.matches[id]).filter((b): b is Match => Boolean(b)).map((b) => matchView(t, b))
+  return { bouts, currentId: m.id }
 }
 
 /** Champion of the last finished category on this court, once nothing else is left there. */
@@ -164,6 +187,13 @@ function lastChampionOn(comp: Competition, courtId: string): { category: Tournam
     if (champ) return { category: c, champion: champ }
   }
   return null
+}
+
+/** Who fights next: the two fighters, or the two teams for a team encounter. */
+function matchup(t: Tournament, m: Match): PublicMatchup {
+  const tm = m.teamMatchId ? t.teamMatches[m.teamMatchId] : undefined
+  if (tm && !m.representative) return { aka: describeEntrant(t, tm.akaTeamId), shiro: describeEntrant(t, tm.shiroTeamId) }
+  return { aka: describeCompetitor(t, m.aka), shiro: describeCompetitor(t, m.shiro) }
 }
 
 /** What one court's scoreboard shows. Without `courtId`: the first court. */
@@ -177,12 +207,22 @@ export function toPublicView(state: AppState, courtId?: string): PublicView {
   const on = onCourt(comp, slot.id)
   // During the last pool match the elimination of the same category is next, not the next category.
   const elim = eliminationsNext(comp, slot.id)
-  const next = elim ? null : nextOnCourt(comp, slot.id)
-  const nextMatch = next ? { aka: describeCompetitor(next.category, next.match.aka), shiro: describeCompetitor(next.category, next.match.shiro) } : null
+  // During a team encounter the next bouts are on the board already: "Next" is the next encounter.
+  const next = elim ? null : nextOnCourt(comp, slot.id, on?.match?.teamMatchId)
+  const nextMatch = next ? matchup(next.category, next.match) : null
   const nextNote = elim ? `Eliminations · ${elim.name}` : null
   if (!on?.match) {
     const done = next ? null : lastChampionOn(comp, slot.id)
     return { ...base, categoryName: done?.category.name ?? on?.category.name ?? null, match: null, team: null, nextMatch, nextNote, champion: done?.champion ?? null }
   }
-  return { ...base, categoryName: on.category.name, champion: null, match: matchView(on.category, on.match), team: teamScore(on.category, on.match), nextMatch, nextNote }
+  return {
+    ...base,
+    categoryName: on.category.name,
+    champion: null,
+    match: matchView(on.category, on.match),
+    team: teamScore(on.category, on.match),
+    encounter: encounterView(on.category, on.match),
+    nextMatch,
+    nextNote
+  }
 }

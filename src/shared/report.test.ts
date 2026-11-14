@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { AdminAction } from './ipc'
 import { podium, podiumView, toPublished } from './published'
+import { toPublicView } from './public-view'
 import { initialState, reduceApp } from './reducer'
 import { diplomaHtml, diplomas, fightingSpiritDiploma, groupSheetsHtml, pinSlipsHtml, reportHtml, resultsCsv } from './report'
 import type { AppState, Side } from './types'
@@ -95,6 +96,30 @@ describe('final standings and documents', () => {
     s = act(s, { type: 'TIMER_START' })
     const shown = toPublished(s, 0)!
     expect(shown.categories[0]!.matches[0]!.aka.playerId).not.toBeNull()
+  })
+
+  it('team encounter on the TV: every bout with its result, the current one marked', () => {
+    let s = act(initialState(), {
+      type: 'CREATE_TOURNAMENT',
+      setup: {
+        name: 'X', date: '2026-11-14', mode: 'team', teamSize: 3, poolSize: 2, advancePerPool: 1, poolMatchMinutes: 3, bracketMatchMinutes: 3, courts: 1, drawSeed: 1,
+        entrants: Array.from({ length: 4 }, (_, t) => Array.from({ length: 3 }, (_, p) => ({ name: `P${t}${p}`, dojo: 'D', team: `T${t}` }))).flat()
+      }
+    })
+    s = act(s, { type: 'ADD_IPPON', side: 'aka', technique: 'M' })
+    s = act(s, { type: 'ADD_IPPON', side: 'aka', technique: 'K' })
+    s = act(s, { type: 'APPROVE_MATCH' })
+    s = act(s, { type: 'ADD_IPPON', side: 'shiro', technique: 'D' })
+    const v = toPublicView(s)
+    expect(v.encounter!.bouts.map((b) => b.positionLabel)).toEqual(['Senpo', 'Chuken', 'Taisho'])
+    expect(v.encounter!.bouts[0]).toMatchObject({ status: 'completed', winner: 'aka', decision: 'ippon' })
+    expect(v.encounter!.currentId).toBe(v.encounter!.bouts[1]!.id)
+    expect(v.encounter!.bouts[1]!.shiro.marks).toHaveLength(1)
+    // "Next" is the next encounter (team names), not the next bout of this one.
+    const t = s.competition!.categories[0]!
+    const names = Object.values(t.teams).map((x) => x.name)
+    expect(names).toContain(v.nextMatch!.aka.name)
+    expect(names).toContain(v.nextMatch!.shiro.name)
   })
 
   it('podium on the TV only for a finished category, and group sheets list every pool', () => {

@@ -2,7 +2,7 @@
 // Read-only and deliberately clock-free: it never shows the remaining time.
 // Dark broadcast style: red and white mark the sides, not whole halves. Shiro left, Aka right.
 
-import type { Person, PodiumView, PublicCompetitor, PublicView } from '@shared/public-view'
+import type { Person, PodiumView, PublicCompetitor, PublicEncounter, PublicMatch, PublicTeamScore, PublicView } from '@shared/public-view'
 import { countryName } from '@shared/countries'
 import { FitText } from './FitText'
 import { Qr } from './Qr'
@@ -60,6 +60,95 @@ function TeamBand({ view }: { view: PublicView }) {
       {pill(t.akaWins, t.akaIppons, true)}
       <span className="display max-w-[600px] truncate text-[54px] font-bold">{t.akaTeam}</span>
     </div>
+  )
+}
+
+const DECISION: Partial<Record<NonNullable<PublicMatch['decision']>, string>> = {
+  hikiwake: 'Hikiwake',
+  'fusen-gachi': 'Fusen-gachi',
+  kiken: 'Kiken',
+  encho: 'Encho'
+}
+
+/** One side of a bout row: name (hansoku under it) and the marks next to the centre column. */
+function BoutSide({ c, side, won, lost, markSize, nameMax }: { c: PublicCompetitor; side: 'aka' | 'shiro'; won: boolean; lost: boolean; markSize: number; nameMax: number }) {
+  const left = side === 'shiro'
+  // Fixed width for two marks, so the name never jumps when a point is scored.
+  const marks = (
+    <div className={`flex shrink-0 items-center gap-3 ${left ? 'justify-end' : 'justify-start'}`} style={{ width: markSize * 2 + 12 }}>
+      {Array.from({ length: Math.max(2, c.marks.length) }, (_, i) =>
+        c.marks[i] ? <MarkBadge key={i} mark={c.marks[i]!} size={markSize} side={side} /> : <MarkSlot key={i} size={markSize} />
+      )}
+    </div>
+  )
+  const name = (
+    <div className={`flex min-w-0 flex-1 flex-col gap-2 ${left ? 'items-start' : 'items-end text-right'} ${lost ? 'opacity-40' : ''}`}>
+      <FitText text={c.name} max={nameMax} min={Math.round(nameMax * 0.55)} className={`display w-full leading-none font-bold ${won ? 'text-white' : 'text-white/90'}`} />
+      {c.hansoku > 0 && (
+        <div className="flex items-center gap-2">
+          {Array.from({ length: c.hansoku }, (_, i) => (
+            <HansokuIcon key={i} size={Math.round(markSize * 0.36)} />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+  return <div className={`flex min-w-0 items-center gap-6 ${left ? '' : 'flex-row-reverse'}`}>{name}{marks}</div>
+}
+
+/**
+ * Team encounter: Shiro's team on the left, Aka's on the right, one row per position with
+ * every bout's result; the bout being fought is highlighted.
+ */
+function TeamBoard({ encounter, team }: { encounter: PublicEncounter; team: PublicTeamScore }) {
+  const n = encounter.bouts.length
+  const markSize = n <= 4 ? 120 : 92
+  const nameMax = n <= 4 ? 84 : 64
+  const pill = (wins: number, ippons: number, aka: boolean) => (
+    <span className={`tabular flex items-baseline gap-3 rounded-xl px-7 py-1 ${aka ? 'bg-aka text-white' : 'bg-shiro text-ink'}`}>
+      <span className="display text-[72px] leading-none font-bold">{wins}</span>
+      <span className="text-[32px] opacity-70">({ippons})</span>
+    </span>
+  )
+  return (
+    <main className="flex min-h-0 flex-1 flex-col px-12 pt-5 pb-6">
+      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-8 pb-4">
+        <div className="flex min-w-0 items-center gap-5">
+          <span className="h-12 w-4 shrink-0 rounded bg-shiro" />
+          <FitText text={team.shiroTeam} max={76} min={40} className="display leading-none font-bold" />
+        </div>
+        <div className="flex items-center gap-5">
+          {pill(team.shiroWins, team.shiroIppons, false)}
+          <span className="text-[44px] text-muted">:</span>
+          {pill(team.akaWins, team.akaIppons, true)}
+        </div>
+        <div className="flex min-w-0 flex-row-reverse items-center gap-5 text-right">
+          <span className="h-12 w-4 shrink-0 rounded bg-aka" />
+          <FitText text={team.akaTeam} max={76} min={40} className="display leading-none font-bold" />
+        </div>
+      </div>
+      <div className="flex min-h-0 flex-1 flex-col gap-3">
+        {encounter.bouts.map((b) => {
+          const current = b.id === encounter.currentId
+          const done = b.status === 'completed'
+          const note = done ? (b.decision ? DECISION[b.decision] : undefined) : current ? 'Now' : undefined
+          return (
+            <div
+              key={b.id}
+              className={`grid min-h-0 flex-1 grid-cols-[1fr_230px_1fr] items-center gap-6 rounded-2xl px-8 ${current ? 'bg-white/[0.08] ring-4 ring-hansoku' : 'bg-surface'} ${!done && !current ? 'opacity-60' : ''}`}
+            >
+              <BoutSide c={b.shiro} side="shiro" won={done && b.winner === 'shiro'} lost={done && b.winner === 'aka'} markSize={markSize} nameMax={nameMax} />
+              <div className="flex flex-col items-center justify-center text-center">
+                <span className="text-[30px] font-bold tracking-[0.25em] text-muted uppercase">{b.positionLabel}</span>
+                {note && <span className={`mt-1 text-[28px] font-bold ${current ? 'text-hansoku' : 'text-white/70'}`}>{note}</span>}
+                {current && b.encho && <span className="mt-1 rounded-md bg-hansoku px-3 text-[26px] font-bold text-ink">Encho</span>}
+              </div>
+              <BoutSide c={b.aka} side="aka" won={done && b.winner === 'aka'} lost={done && b.winner === 'shiro'} markSize={markSize} nameMax={nameMax} />
+            </div>
+          )
+        })}
+      </div>
+    </main>
   )
 }
 
@@ -136,9 +225,13 @@ function Board({ view }: { view: PublicView | null }) {
         </div>
       </header>
 
-      {view && <TeamBand view={view} />}
+      {view?.encounter && view.team ? (
+        <TeamBoard encounter={view.encounter} team={view.team} />
+      ) : (
+        view && <TeamBand view={view} />
+      )}
 
-      {m ? (
+      {view?.encounter && view.team ? null : m ? (
         <main className="relative grid flex-1 grid-cols-2">
           <Half side="shiro" c={m.shiro} />
           <Half side="aka" c={m.aka} />
