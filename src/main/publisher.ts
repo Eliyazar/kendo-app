@@ -2,7 +2,7 @@
 // team orders. Never blocks the competition: failures only change the status.
 
 import type { AdminAction, DispatchResult, OnlineStatus } from '@shared/ipc'
-import { openLineups, pinHash, slugFor, toPublished, type LineupSubmission, type PublishPayload } from '@shared/published'
+import { isNewName, newNameKey, openLineups, pinHash, slugFor, toPublished, type LineupSubmission, type PublishPayload } from '@shared/published'
 import type { AppState } from '@shared/types'
 
 /** At most one upload per 2 s (Workers Paid plan). */
@@ -105,6 +105,35 @@ export class Publisher {
     }
   }
 
+  /**
+   * Names the captain typed ("+Name") become players of the team (or the member with that name),
+   * so the order holds player ids only. Returns an error text when a name cannot be added.
+   */
+  private resolveNewNames(s: LineupSubmission): (string | null)[] | string {
+    const out: (string | null)[] = []
+    for (const v of s.lineup) {
+      if (!isNewName(v)) {
+        out.push(v)
+        continue
+      }
+      const name = v.slice(1).replace(/\s+/g, ' ').trim()
+      const find = (): string | undefined => {
+        const cat = this.deps.getState().competition?.categories.find((c) => c.teams[s.teamId])
+        const team = cat?.teams[s.teamId]
+        return team?.members.find((id) => cat!.players[id] && newNameKey(`+${cat!.players[id]!.name}`) === newNameKey(v))
+      }
+      let id = find()
+      if (!id) {
+        const r = this.deps.dispatch({ type: 'ADD_TEAM_MEMBER', teamId: s.teamId, member: { name } })
+        if (!r.ok) return `${name}: ${r.error}`
+        id = find()
+      }
+      if (!id) return `${name} could not be added`
+      out.push(id)
+    }
+    return out
+  }
+
   /** Apply captains' order submissions, then acknowledge them. */
   private async pullInbox(): Promise<void> {
     const { enabled, url, key } = this.deps.config()
@@ -117,7 +146,8 @@ export class Publisher {
       if (!subs.length) return
       for (const s of subs) {
         const team = t.categories.find((c) => c.teams[s.teamId])?.teams[s.teamId]?.name ?? 'A team'
-        const r = this.deps.dispatch({ type: 'SET_LINEUP', teamMatchId: s.teamMatchId, teamId: s.teamId, lineup: s.lineup })
+        const lineup = this.resolveNewNames(s)
+        const r = typeof lineup === 'string' ? { ok: false as const, error: lineup } : this.deps.dispatch({ type: 'SET_LINEUP', teamMatchId: s.teamMatchId, teamId: s.teamId, lineup })
         this.deps.notice(r.ok ? `${team}: captain's order received and applied.` : `${team}: captain's order not applied — ${r.error}`, r.ok ? 'info' : 'warn')
       }
       await request(`${url}/api/admin/${slug}/ack`, key, { method: 'POST', body: { ids: subs.map((s) => s.id) } })

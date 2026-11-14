@@ -85,3 +85,30 @@ describe('overlay of pending submissions on a fresh publish', () => {
     expect(secret.openLineups.tm1!.tA).toEqual(['a1', null, null]) // input not mutated
   })
 })
+
+describe('names typed by the captain', () => {
+  const short = () => {
+    const sn = teamSnapshot()
+    const cat = sn.categories[1]!
+    // Beta has only one name on the list yet.
+    cat.teams = cat.teams.map((t) => (t.id === 'tB' ? { ...t, members: ['b1'] } : t))
+    return sn
+  }
+  const check = (lineup: (string | null)[], sn = short()) => validateLineup(sn, secret.openLineups, 'tB', 'tm1', lineup)
+
+  it('accepts new names while the team list is short, mixed with listed members', () => {
+    expect(check(['+Ivan Petrov', 'b1', '+Georgi Ivanov'])).toEqual({ ok: true, side: 'shiro' })
+  })
+
+  it('rejects typing once the table has entered the whole team', () => {
+    expect(validateLineup(snap, secret.openLineups, 'tB', 'tm1', ['+Ivan Petrov', 'b2', 'b3']).ok).toBe(false)
+  })
+
+  it('rejects a typed name twice, a name already listed, and empty names', () => {
+    expect(check(['+Ivan Petrov', '+ivan  petrov', null]).ok).toBe(false)
+    const listed = short().categories[1]!.players.find((p) => p.id === 'b1')!.name
+    expect(check([`+${listed}`, null, null]).ok).toBe(false)
+    expect(check(['+', null, null]).ok).toBe(false)
+  })
+})
+

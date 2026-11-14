@@ -20,6 +20,20 @@ export type {
 export type { Person, PublicCompetitor, PublicMatch, PublicMatchup, PublicTeamScore, PublicView } from '../../src/shared/public-view'
 export type { ScoreMark } from '../../src/shared/match-engine'
 
+// ---- Typed names in a captain's order (same rule as NEW_NAME_PREFIX in src/shared/published.ts) ----
+
+/** "+Name": a player the team list does not have yet; the laptop adds them. */
+export const NEW_NAME_PREFIX = '+'
+export const isNewName = (v: string | null | undefined): v is string => typeof v === 'string' && v.startsWith(NEW_NAME_PREFIX)
+export const newNameKey = (v: string): string =>
+  v
+    .slice(NEW_NAME_PREFIX.length)
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim()
+
 // ---- API shapes shared by the worker and the web app ----
 
 export interface TeamEncounterInfo {

@@ -166,6 +166,15 @@ export interface PublishPayload {
   secret: PublishedSecret
 }
 
+/**
+ * In a captain's order, a position may hold a name the team list does not have yet (the names
+ * come on the day): "+Name". Allowed only while the team has fewer players than positions;
+ * the laptop adds the player and puts them in the order.
+ */
+export const NEW_NAME_PREFIX = '+'
+export const isNewName = (v: string | null): v is string => typeof v === 'string' && v.startsWith(NEW_NAME_PREFIX)
+export const newNameKey = (v: string): string => v.slice(NEW_NAME_PREFIX.length).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim()
+
 /** A captain's order submission, as stored by the worker and pulled by the laptop. */
 export interface LineupSubmission {
   id: string

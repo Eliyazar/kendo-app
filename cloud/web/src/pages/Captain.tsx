@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { PubCategory, PubPerson, PubTeam, PublishedSnapshot, TeamEncounterInfo } from '../../../src/contract'
+import { NEW_NAME_PREFIX, isNewName, newNameKey, type PubCategory, type PubPerson, type PubTeam, type PublishedSnapshot, type TeamEncounterInfo } from '../../../src/contract'
 import { submitLineup, teamLogin } from '../api'
 import { Card, Chip, Empty, SectionTitle, SideDot } from '../components/ui'
 
@@ -22,10 +22,13 @@ function positionsFor(cat: PubCategory | undefined, teamMatchId: string, size: n
   return Array.from({ length: size }, (_, i) => bouts[i]?.positionLabel ?? `Position ${i + 1}`)
 }
 
+/** Same fighter twice (a typed name counts by its letters, ignoring case and accents). */
 function hasDuplicates(lineup: (string | null)[]): boolean {
-  const ids = lineup.filter((x): x is string => x !== null)
-  return new Set(ids).size !== ids.length
+  const keys = lineup.filter((x): x is string => x !== null && !(isNewName(x) && !newNameKey(x))).map((x) => (isNewName(x) ? `+${newNameKey(x)}` : x))
+  return new Set(keys).size !== keys.length
 }
+
+const NEW = '__new__'
 
 function StatusLine({ enc, dirty }: { enc: TeamEncounterInfo; dirty: boolean }) {
   if (dirty) return <Chip tone="amber">Not sent yet</Chip>
@@ -55,6 +58,11 @@ function EncounterEditor({
 }) {
   const dupes = hasDuplicates(draft)
   const dirty = JSON.stringify(draft) !== JSON.stringify(enc.lineup)
+  // Names can be typed only while the table has not entered the whole team; then the captain only orders them.
+  const canType = players.length < positions.length
+  const typed = draft.filter(isNewName)
+  const unfinished = typed.some((v) => v.slice(1).trim().length < 2)
+  const tooMany = players.length + typed.length > positions.length
   return (
     <Card className="p-4">
       <div className="flex flex-wrap items-start justify-between gap-2">
@@ -74,36 +82,58 @@ function EncounterEditor({
 
       <div className="mt-4 space-y-3">
         {positions.map((pos, i) => {
-          const value = draft[i] ?? ''
-          const clash = value !== '' && draft.filter((x) => x === value).length > 1
+          const raw = draft[i] ?? null
+          const isTyped = isNewName(raw)
+          const value = isTyped ? NEW : (raw ?? '')
+          const clash = raw !== null && draft.filter((x) => x === raw).length > 1
+          const nameInput = (
+            <input
+              value={isTyped ? raw.slice(NEW_NAME_PREFIX.length) : ''}
+              onChange={(e) => onChange(i, players.length === 0 && !e.target.value ? null : NEW_NAME_PREFIX + e.target.value.replace(/^\s+/, ''))}
+              placeholder="First and last name"
+              maxLength={60}
+              autoComplete="off"
+              className={`${fieldClass} ${clash ? 'border-aka' : ''}`}
+            />
+          )
           return (
             <label key={i} className="grid grid-cols-[88px_1fr] items-center gap-3">
               <span className="display text-base text-muted">{pos}</span>
-              <select
-                value={value}
-                onChange={(e) => onChange(i, e.target.value === '' ? null : e.target.value)}
-                className={`${fieldClass} ${clash ? 'border-aka' : ''}`}
-                aria-invalid={clash}
-              >
-                <option value="">— empty —</option>
-                {players.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
+              {players.length === 0 ? (
+                nameInput
+              ) : (
+                <div className="space-y-2">
+                  <select
+                    value={value}
+                    onChange={(e) => onChange(i, e.target.value === '' ? null : e.target.value === NEW ? NEW_NAME_PREFIX : e.target.value)}
+                    className={`${fieldClass} ${clash ? 'border-aka' : ''}`}
+                    aria-invalid={clash}
+                  >
+                    <option value="">— empty —</option>
+                    {players.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                    {(canType || isTyped) && <option value={NEW}>✎ Type a new name…</option>}
+                  </select>
+                  {isTyped && nameInput}
+                </div>
+              )}
             </label>
           )
         })}
       </div>
 
+      {canType && <p className="mt-3 text-xs text-muted">{players.length ? 'Someone missing from the list? Choose “Type a new name”.' : 'Write the names of your fighters; the table adds them to your team.'}</p>}
       {dupes && <p className="mt-3 text-sm text-aka">A fighter can only be placed once.</p>}
+      {tooMany && <p className="mt-3 text-sm text-aka">Your team can have {positions.length} names; {players.length} are on the list already.</p>}
       {notice && <p className={`mt-3 text-sm ${notice.ok ? 'text-ok' : 'text-aka'}`}>{notice.text}</p>}
 
       <button
         type="button"
         onClick={onSubmit}
-        disabled={busy || dupes || (!dirty && enc.submitted)}
+        disabled={busy || dupes || unfinished || tooMany || (!dirty && enc.submitted)}
         className="mt-4 w-full rounded-xl bg-amber px-4 py-3 text-base font-semibold text-bg disabled:cursor-not-allowed disabled:opacity-40"
       >
         {busy ? 'Sending…' : 'Send order'}
