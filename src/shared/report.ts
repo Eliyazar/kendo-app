@@ -7,7 +7,7 @@ import { podium } from './published'
 import { describeCompetitor, describeEntrant, matchLabel, positionLabel, roundName } from './public-view'
 import { computeScore } from './match-engine'
 import { markLetter } from './marks'
-import { computeStandings } from './standings'
+import { computeStandings, eliminationOnly } from './standings'
 import type { Competition, Id, Match, Tournament } from './types'
 
 const esc = (s: string): string => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!)
@@ -108,7 +108,7 @@ ${d.category ? `<div class="cat">${esc(d.category)}</div>` : ''}
 
 function poolTables(t: Tournament): string {
   const team = t.mode === 'team'
-  return t.pools
+  return (eliminationOnly(t) ? [] : t.pools)
     .map((pool) => {
       const rows = computeStandings(t, pool)
         .map((r) => {
@@ -274,7 +274,7 @@ h1 { font-size: 26pt; margin: 4mm 0 1mm } .date { font-size: 13pt; color: #555 }
 export function groupSheetsHtml(comp: Competition): string {
   const courtName = (id: Id) => comp.courts.find((c) => c.id === id)?.name ?? ''
   const blocks = comp.categories.flatMap((t) =>
-    t.pools.map((pool) => {
+    (eliminationOnly(t) ? [] : t.pools).map((pool) => {
       const entrants = pool.entrantIds
         .map((id, i) => {
           const who = describeEntrant(t, id)

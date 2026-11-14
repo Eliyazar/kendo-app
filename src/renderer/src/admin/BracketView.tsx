@@ -5,6 +5,7 @@ import { podium } from '@shared/published'
 import { champion, describeEntrant, roundName } from '@shared/public-view'
 import { suggestBracketPairs } from '@shared/bracket'
 import { canChangeBracket } from '@shared/court-tools'
+import { eliminationOnly } from '@shared/standings'
 import type { AdminAction } from '@shared/ipc'
 import { bracketText, poolLetter } from '@shared/setup'
 import { BracketField } from './BracketField'
@@ -74,7 +75,8 @@ function PodiumButton({ t, shown, send }: { t: Tournament; shown: boolean; send?
 
 /** Elimination pairings, editable until an elimination match starts. */
 function BracketPlanEditor({ t, send }: { t: Tournament; send?: ((a: AdminAction) => void) | undefined }) {
-  if (!send || !canChangeBracket(t)) return null
+  // A category drawn straight into the elimination has no pool places to rearrange.
+  if (!send || !canChangeBracket(t) || eliminationOnly(t)) return null
   const pairs = t.bracketPlan?.kind === 'pairs' ? t.bracketPlan.pairs : []
   return (
     <div className="rounded-2xl border border-white/10 bg-neutral-900 px-4 py-3">

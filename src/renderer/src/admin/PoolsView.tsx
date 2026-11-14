@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import type { AdminAction } from '@shared/ipc'
 import { describeEntrant } from '@shared/public-view'
-import { computeStandings, poolDone, poolMatchesComplete, poolsComplete, tieBreakPending, unresolvedTies } from '@shared/standings'
+import { computeStandings, eliminationOnly, poolDone, poolMatchesComplete, poolsComplete, tieBreakPending, unresolvedTies } from '@shared/standings'
 import type { Pool, Tournament } from '@shared/types'
 import { useConfirm } from './useAdmin'
 
@@ -147,6 +147,18 @@ function PoolTable({ t, pool, review, send }: { t: Tournament; pool: Pool; revie
 }
 
 export function PoolsView({ t, send, manualReview = false }: { t: Tournament; send: (a: AdminAction) => void; manualReview?: boolean }) {
+  if (eliminationOnly(t)) {
+    return (
+      <div className="rounded-2xl border border-white/10 bg-neutral-900 px-5 py-4">
+        <h2 className="text-xl font-black">No pools</h2>
+        <p className="text-sm text-white/50">{t.name} starts with the elimination: see the Bracket tab.</p>
+      </div>
+    )
+  }
+  return <PoolsPanel t={t} send={send} manualReview={manualReview} />
+}
+
+function PoolsPanel({ t, send, manualReview }: { t: Tournament; send: (a: AdminAction) => void; manualReview: boolean }) {
   // Review starts once every regular pool match is approved; tie-breakers run per pool.
   const complete = poolMatchesComplete(t)
   const review = t.phase === 'pools' && complete

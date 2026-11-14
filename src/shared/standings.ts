@@ -211,3 +211,11 @@ export function unresolvedTies(t: Tournament): TieGroup[] {
   }
   return ties
 }
+
+/**
+ * The category starts with the elimination: every "pool" holds one entrant and has no matches
+ * (the draw lists only the bracket). Such pools are an internal detail and are not shown.
+ */
+export function eliminationOnly(t: Tournament): boolean {
+  return t.pools.length > 1 && t.pools.every((p) => p.entrantIds.length === 1) && !Object.values(t.matches).some((m) => m.poolId)
+}

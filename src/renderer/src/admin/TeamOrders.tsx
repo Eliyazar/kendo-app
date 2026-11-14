@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { encounterOpen, lineupOf } from '@shared/encounters'
 import type { AdminAction } from '@shared/ipc'
 import { matchLabel } from '@shared/public-view'
-import type { Competition, Side, TeamMatch, Tournament } from '@shared/types'
+import { TEAM_POSITIONS, type Competition, type Side, type Team, type TeamMatch, type TeamSize, type Tournament } from '@shared/types'
 import { OrderSelects } from './ParticipantsView'
 
 interface Encounter {
@@ -28,7 +28,34 @@ function openEncounters(comp: Competition, courtId: string | null, limit: number
   return out
 }
 
+/** A team of this encounter has nobody on its list yet. */
+const noPlayers = ({ t, tm }: Encounter): boolean => [tm.akaTeamId, tm.shiroTeamId].some((id) => t.teams[id] && !t.teams[id]!.members.length)
+
 const title = ({ t, tm }: Encounter) => `${t.teams[tm.akaTeamId]?.name ?? '—'} vs ${t.teams[tm.shiroTeamId]?.name ?? '—'}`
+
+/** A player who is not on the team yet (names arrive on the captain's paper): typed in order, they fill the empty positions. */
+function AddPlayer({ team, send }: { team: Team; send: (a: AdminAction) => Promise<boolean> }) {
+  const [name, setName] = useState('')
+  const empty = team.order.filter((id) => id === null).length
+  const add = async () => {
+    if (name.trim() && (await send({ type: 'ADD_TEAM_MEMBER', teamId: team.id, member: { name: name.trim() } }))) setName('')
+  }
+  return (
+    <div className="mt-3 flex items-center gap-2">
+      <input
+        className="min-w-0 flex-1 rounded-md border border-line bg-surface-2 px-3 py-1.5 text-sm outline-none focus:border-hansoku"
+        placeholder={team.members.length ? 'Add a player (reserve or new name)…' : `No players yet: type the names in fighting order (${TEAM_POSITIONS[team.size as TeamSize][0]} first), Enter after each`}
+        value={name}
+        maxLength={100}
+        onChange={(e) => setName(e.target.value)}
+        onKeyDown={(e) => e.key === 'Enter' && void add()}
+      />
+      <button disabled={!name.trim()} onClick={() => void add()} className="shrink-0 rounded-md bg-neutral-700 px-3 py-1.5 text-sm font-bold hover:bg-neutral-600 disabled:opacity-30">
+        + Add{empty ? ` (${TEAM_POSITIONS[team.size as TeamSize][team.order.indexOf(null)]})` : ' as reserve'}
+      </button>
+    </div>
+  )
+}
 
 function EncounterDialog({ enc, send, onClose }: { enc: Encounter; send: (a: AdminAction) => Promise<boolean>; onClose: () => void }) {
   const { t, tm } = enc
@@ -48,6 +75,7 @@ function EncounterDialog({ enc, send, onClose }: { enc: Encounter; send: (a: Adm
           </span>
         </div>
         <OrderSelects team={team} t={t} value={lineupOf(t, tm, s)} onChange={(lineup) => void send({ type: 'SET_LINEUP', teamMatchId: tm.id, teamId: team.id, lineup })} />
+        <AddPlayer team={team} send={send} />
       </div>
     )
   }
@@ -93,7 +121,11 @@ export function TeamOrdersBar({ comp, courtId, send }: { comp: Competition; cour
           >
             <span className="text-xs text-muted">{i === 0 ? 'Next' : `+${i}`}</span>
             <span className="truncate">{title(e)}</span>
-            <span className={`rounded px-1.5 text-[10px] font-bold ${set === 2 ? 'bg-emerald-600' : 'bg-amber-500 text-ink'}`}>{set}/2 set</span>
+            {noPlayers(e) ? (
+              <span className="rounded bg-red-600 px-1.5 text-[10px] font-bold">names missing</span>
+            ) : (
+              <span className={`rounded px-1.5 text-[10px] font-bold ${set === 2 ? 'bg-emerald-600' : 'bg-amber-500 text-ink'}`}>{set}/2 set</span>
+            )}
           </button>
         )
       })}

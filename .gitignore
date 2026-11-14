@@ -10,3 +10,5 @@ Thumbs.db
 
 # Local-only tests (real participant files)
 *.local.test.ts
+
+teamday.json

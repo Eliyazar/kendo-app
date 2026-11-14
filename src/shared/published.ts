@@ -9,7 +9,7 @@ import { describeEntrant, matchLabel, positionLabel, toPublicView, type PodiumVi
 import { encounterOpen, entrantOf, isWithdrawn, lineupOf, tallyEncounter } from './encounters'
 import { markLetter } from './marks'
 import { computeScore } from './match-engine'
-import { computeStandings, medalForRank } from './standings'
+import { computeStandings, eliminationOnly, medalForRank } from './standings'
 import type { AppState, Competition, Id, Match, MatchDecision, MatchKind, MatchStatus, Side, Tournament, TournamentMode, TournamentPhase } from './types'
 
 export const PUBLISHED_VERSION = 2
@@ -284,7 +284,7 @@ function publishCategory(t: Tournament, categoryIndex: number): PubCategory {
       if (team.withdrawn) out.withdrawn = true
       return out
     }),
-    pools: t.pools.map((pool) => ({
+    pools: (eliminationOnly(t) ? [] : t.pools).map((pool) => ({
       id: pool.id,
       name: pool.name,
       standings: computeStandings(t, pool).map((r) => ({

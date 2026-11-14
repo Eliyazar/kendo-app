@@ -105,7 +105,13 @@ export function ScoringPanel({ side, competitor: c, scoring, canFusen, canKiken 
           }`}
           title={`Opponent absent (before the match starts): ${aka ? 'Aka' : 'Shiro'} wins with two circles ○○ (2 ippons)`}
         >
-          {fusenArmed ? 'Confirm fusen-gachi ○○?' : 'Fusen-gachi ○○ · opponent absent'}
+          {fusenArmed ? (
+            'Confirm fusen-gachi ○○?'
+          ) : (
+            <>
+              Fusen-gachi ○○<span className="block text-xs font-normal opacity-70">opponent absent</span>
+            </>
+          )}
         </button>
         )}
       </div>
