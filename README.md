@@ -168,9 +168,9 @@ The state lives in the main process (driven only by Admin actions) so the clock 
 
 ### Screens
 
-- **Public Scoreboard**: drawn on a fixed 1920×1080 canvas and scaled to the display. It has a red/white split, names, dojo, circled ippon letters (M/K/D/T, H for an ippon from hansoku), yellow hansoku triangles, a team score band and a "Next Match" footer. It never shows the clock. At time-up it flashes **TIME UP** (no sound: the referees whistle). At the end it shows the champion.
+- **Public Scoreboard**: drawn on a fixed 1920×1080 canvas and scaled to the display. It has a white/red split (Shiro left, Aka right, as on the operator screen and the stream), names, dojo, circled ippon letters (M/K/D/T, H for an ippon from hansoku), yellow hansoku triangles, a team score band and a "Next Match" footer. It never shows the clock. Time-up is not shown (the referees call it). At the end it shows the champion.
 - **Admin Control Panel** has three tabs:
-  - **Shiai-jo**: live preview, master timer (Start/Pause, ±1 s, Reset), Aka/Shiro scoring (M, K, D, T, H, Fusen-gachi), Undo and the match order. When a match ends, a verification modal offers **Correction / Undo** and **Approve & End Match**, or **Start Encho** for a drawn elimination match.
+  - **Shiai-jo**: live preview, master timer (Start/Pause, ±1 s, Reset), Shiro/Aka scoring (M, K, D, T, H, Fusen-gachi ○○ for an absent opponent), Undo, **Encho now** (any time the score is level, e.g. when the clock was missed) and the match order. When a match ends, a verification modal offers **Correction / Undo** and **Approve & End Match**, or **Start Encho** for a drawn elimination match. Elimination matches are fought round by round: fighters with a bye wait until every first-round match is over.
   - **Pools**: standings and Pool Review.
   - **Bracket**: the elimination tree and the champion.
 - Shortcuts: `Space` starts or pauses the clock, `Ctrl/Cmd+Z` undoes the last action, and `Ctrl/Cmd+Shift+P` reopens the public window.

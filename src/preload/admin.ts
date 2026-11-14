@@ -11,6 +11,7 @@ const bridge: AdminBridge = {
   exportPoster: () => ipcRenderer.invoke(IPC.adminExportPoster),
   chooseDiplomaFile: (kind) => ipcRenderer.invoke(IPC.adminDiplomaFile, kind),
   diplomaTest: () => ipcRenderer.invoke(IPC.adminDiplomaTest),
+  fightingSpirit: (categoryId: string) => ipcRenderer.invoke(IPC.adminFightingSpirit, categoryId),
   exportGroupSheets: () => ipcRenderer.invoke(IPC.adminExportSheets),
   backupNow: () => ipcRenderer.invoke(IPC.adminBackupNow),
   restoreBackup: () => ipcRenderer.invoke(IPC.adminRestoreBackup),

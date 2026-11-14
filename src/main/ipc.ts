@@ -8,7 +8,7 @@ import { ADMIN_ACTION_TYPES, IPC, type AdminAction, type AdminSnapshot, type Dis
 import type { PublicView } from '@shared/public-view'
 import type { AppContext } from './context'
 import { TEMPLATE_FILE } from './diploma-pdf'
-import { documentsBase, exportDiplomaTest, exportGroupSheets, exportPoster, exportResults } from './export'
+import { documentsBase, exportDiplomaTest, exportFightingSpirit, exportGroupSheets, exportPoster, exportResults } from './export'
 import { importDraw, importParticipants } from './import'
 import { mergeSettings } from './settings'
 
@@ -29,6 +29,7 @@ const STRING_FIELDS: Partial<Record<AdminAction['type'], string[]>> = {
   LOAD_MATCH: ['matchId'],
   TAKE_POOL: ['poolId'],
   MOVE_CATEGORY: ['categoryId'],
+  SET_FIGHTING_SPIRIT: ['categoryId'],
   SET_BRACKET: ['categoryId'],
   ADD_PLAYOFF: ['poolId'],
   REMOVE_MATCH: ['matchId'],
@@ -75,6 +76,7 @@ export function parseAdminAction(input: unknown, allowDev: boolean): AdminAction
   if ((type === 'ADD_HANSOKU' || type === 'FUSEN_GACHI' || type === 'SET_REPRESENTATIVE' || type === 'KIKEN') && !SIDES.includes(a['side'] as string)) return null
   if (type === 'SET_BRACKET' && !(typeof a['text'] === 'string' && (a['text'] as string).length <= 1000)) return null
   if (type === 'SET_POOL_REVIEW' && typeof a['manual'] !== 'boolean') return null
+  if (type === 'SET_FIGHTING_SPIRIT' && !(typeof a['name'] === 'string' && (a['name'] as string).length <= 100)) return null
   if (type === 'MOVE_CATEGORY' && a['direction'] !== 'up' && a['direction'] !== 'down') return null
   if (type === 'MOVE_IN_QUEUE' && a['direction'] !== 'up' && a['direction'] !== 'down') return null
   if (type === 'ADD_PLAYOFF' && a['encho'] !== undefined && typeof a['encho'] !== 'boolean') return null
@@ -160,6 +162,9 @@ export function registerIpc(ctx: AppContext, windows: WindowRefs): void {
     return { ok: true }
   })
   ipcMain.handle(IPC.adminDiplomaTest, (e): Promise<ExportResult> | ExportResult => (fromAdmin(e) ? exportDiplomaTest() : { ok: false, error: 'Not allowed.' }))
+  ipcMain.handle(IPC.adminFightingSpirit, (e, categoryId: unknown): Promise<ExportResult> | ExportResult =>
+    fromAdmin(e) && str(categoryId) ? exportFightingSpirit(ctx.getState(), categoryId) : { ok: false, error: 'Not allowed.' }
+  )
   ipcMain.handle(IPC.adminBackupNow, async (e): Promise<ExportResult> => {
     if (!fromAdmin(e)) return { ok: false, error: 'Not allowed.' }
     const r = await ctx.backups.run(true)

@@ -1,5 +1,6 @@
 // Writes results to Documents/Kendo Tournament Manager/<date> <competition>/:
 //   <category>/results.pdf, results.csv, diplomas/*.pdf   (one folder per category)
+//   <category>/fighting-spirit.pdf                        (once the table typed the name)
 //   captain-pins.pdf                                      (team categories)
 // A custom diploma background can be dropped into the app's data folder as
 // diploma-template.png / .jpg; the default layout is used otherwise.
@@ -10,8 +11,8 @@ import { app, BrowserWindow } from 'electron'
 import type { ExportResult } from '@shared/ipc'
 import QRCode from 'qrcode'
 import { diplomasOnTemplate, hasTemplate } from './diploma-pdf'
-import { diplomaHtml, diplomas, groupSheetsHtml, pinSlipsHtml, posterHtml, reportHtml, resultsCsv } from '@shared/report'
-import type { AppState, Id } from '@shared/types'
+import { diplomaHtml, diplomas, fightingSpiritDiploma, groupSheetsHtml, pinSlipsHtml, posterHtml, reportHtml, resultsCsv } from '@shared/report'
+import type { AppState, Id, Tournament } from '@shared/types'
 
 const safe = (s: string): string => s.replace(/[<>:"/\\|?*\x00-\x1f]+/g, '_').trim().slice(0, 60).replace(/[\s.]+$/, '') || 'competition' // Windows: no trailing space or dot
 
@@ -65,11 +66,11 @@ export async function exportDiplomaTest(): Promise<ExportResult> {
   try {
     const folder = documentsBase()
     await fs.mkdir(folder, { recursive: true })
-    const sample = (place: 1 | 2 | 3, name: string, category: string, team?: string) => ({ place, name, country: 'BUL', dojo: '', tournament: 'Test', category, date: '2026-01-01', ...(team ? { team } : {}) })
+    const sample = (place: 1 | 2 | 3 | 'spirit', name: string, category: string) => ({ place, name, country: 'BUL', dojo: '', tournament: 'Test', category, date: '2026-01-01' })
     const bytes = await diplomasOnTemplate(dataDir, [
       sample(1, 'Desislava Kasnakova', 'Senior female individual'),
-      sample(2, 'Ivan Petrov', 'Senior Teams', 'Ruse Cup'),
-      sample(3, 'Andrey Atanaskovski-Krastevski', 'Children individual (under 12 years old)', 'North Macedonia')
+      sample(2, 'Kendo Club Ruse', 'Senior Teams'),
+      sample('spirit', 'Andrey Atanaskovski-Krastevski', 'Children individual (under 12 years old)')
     ], 'Test')
     await save(path.join(folder, 'diploma-test.pdf'), bytes)
     return { ok: true, folder, files: 1 }
@@ -124,6 +125,36 @@ export async function exportGroupSheets(state: AppState): Promise<ExportResult> 
   }
 }
 
+/** Writes <category>/fighting-spirit.pdf (on the organiser's design when there is one). */
+async function writeFightingSpirit(win: BrowserWindow, dir: string, t: Tournament, competitionName: string, designed: boolean, background: string | undefined): Promise<boolean> {
+  const d = fightingSpiritDiploma(t, competitionName)
+  if (!d) return false
+  await fs.mkdir(dir, { recursive: true })
+  const bytes = designed ? await diplomasOnTemplate(app.getPath('userData'), [d], t.name) : await htmlToPdf(win, diplomaHtml(d, background), true)
+  await save(path.join(dir, 'fighting-spirit.pdf'), bytes)
+  return true
+}
+
+/** The Fighting Spirit diploma of one category, on its own. */
+export async function exportFightingSpirit(state: AppState, categoryId: Id): Promise<ExportResult> {
+  const comp = state.competition
+  const t = comp?.categories.find((c) => c.id === categoryId)
+  if (!comp || !t) return { ok: false, error: 'Unknown category.' }
+  if (!t.fightingSpirit?.trim()) return { ok: false, error: 'Type the name first.' }
+  const folder = competitionFolder(state)
+  const dir = comp.categories.length === 1 ? folder : path.join(folder, safe(t.name))
+  renamed = []
+  const win = new BrowserWindow({ show: false, webPreferences: { sandbox: true, javascript: false } })
+  try {
+    await writeFightingSpirit(win, dir, t, comp.name, await hasTemplate(app.getPath('userData')), await diplomaBackground())
+    return renamed.length ? { ok: true, folder: dir, files: 1, note: `${renamed.join('; ')}. Close it to have the usual name next time.` } : { ok: true, folder: dir, files: 1 }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) }
+  } finally {
+    win.destroy()
+  }
+}
+
 export async function exportResults(state: AppState, onlineUrl: string | null = null, categoryId?: Id): Promise<ExportResult> {
   const comp = state.competition
   if (!comp) return { ok: false, error: 'No competition loaded.' }
@@ -154,6 +185,7 @@ export async function exportResults(state: AppState, onlineUrl: string | null = 
           files++
         }
       }
+      if (await writeFightingSpirit(win, dir, t, comp.name, designed, background)) files++
     }
     const teamCategories = categories.filter((t) => t.mode === 'team')
     if (teamCategories.length) {

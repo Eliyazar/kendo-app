@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import type { AdminAction } from '@shared/ipc'
-import { isTimeUp, timerDisplayMs, timerElapsed, lastUndoableEvent } from '@shared/match-engine'
+import { canStartEncho, isTimeUp, timerDisplayMs, timerElapsed, lastUndoableEvent } from '@shared/match-engine'
 import type { Match, PointEvent } from '@shared/types'
 import { formatClock, useConfirm, useTicker } from './useAdmin'
 
@@ -82,6 +82,8 @@ export function TimerPanel({ match, now, send, canLater = false, canSwap = false
   const timeUp = isTimeUp(match.timer, t)
   const locked = match.status === 'awaiting-confirmation' || match.status === 'completed'
   const [resetArmed, confirmReset] = useConfirm()
+  const [enchoArmed, confirmEncho] = useConfirm()
+  const encho = canStartEncho(match)
   const last = lastUndoableEvent(match)
   const [editing, setEditing] = useState<null | 'clock' | 'length'>(null)
   const canEdit = !running && match.status !== 'completed'
@@ -89,7 +91,11 @@ export function TimerPanel({ match, now, send, canLater = false, canSwap = false
   /** Put the clock on exactly `ms` (remaining time; elapsed time in Encho). Longer than the regulation time extends it. */
   const setClock = (ms: number) => {
     const shown = timerDisplayMs(match.timer, t)
-    if (!stopwatch && ms > match.timer.durationMs) send({ type: 'TIMER_SET_DURATION', durationMs: timerElapsed(match.timer, t) + ms })
+    if (!stopwatch && ms > match.timer.durationMs)
+      send({
+        type: 'TIMER_SET_DURATION',
+        durationMs: timerElapsed(match.timer, t) + ms
+      })
     else if (ms !== shown) send({ type: 'TIMER_ADJUST', deltaMs: ms - shown })
     setEditing(null)
   }
@@ -146,9 +152,7 @@ export function TimerPanel({ match, now, send, canLater = false, canSwap = false
         <button
           disabled={locked || (!running && timeUp)}
           onClick={() => send({ type: running ? 'TIMER_PAUSE' : 'TIMER_START' })}
-          className={`h-16 rounded-xl text-2xl font-black transition disabled:opacity-30 ${
-            running ? 'bg-amber-500 text-ink hover:bg-amber-400' : 'bg-emerald-600 hover:bg-emerald-500'
-          }`}
+          className={`h-16 rounded-xl text-2xl font-black transition disabled:opacity-30 ${running ? 'bg-amber-500 text-ink hover:bg-amber-400' : 'bg-emerald-600 hover:bg-emerald-500'}`}
           title="Space"
         >
           {running ? 'Pause' : 'Start'}
@@ -170,9 +174,7 @@ export function TimerPanel({ match, now, send, canLater = false, canSwap = false
         <button
           disabled={match.status === 'completed'}
           onClick={() => confirmReset(() => send({ type: 'TIMER_RESET' }))}
-          className={`h-16 rounded-xl text-lg font-bold disabled:opacity-30 ${
-            resetArmed ? 'bg-red-600 hover:bg-red-500' : 'bg-neutral-700 hover:bg-neutral-600'
-          }`}
+          className={`h-16 rounded-xl text-lg font-bold disabled:opacity-30 ${resetArmed ? 'bg-red-600 hover:bg-red-500' : 'bg-neutral-700 hover:bg-neutral-600'}`}
         >
           {resetArmed ? 'Confirm?' : 'Reset'}
         </button>
@@ -188,26 +190,32 @@ export function TimerPanel({ match, now, send, canLater = false, canSwap = false
         <kbd className="ml-2 rounded bg-white/10 px-1.5 text-xs text-white/60">Ctrl+Z</kbd>
       </button>
 
-      {(canLater || canSwap) && (
-        <div className="mt-3 grid grid-cols-2 gap-3">
-          <button
-            disabled={!canLater}
-            onClick={() => send({ type: 'POSTPONE_MATCH' })}
-            className="h-11 rounded-xl bg-neutral-800 text-sm font-semibold hover:bg-neutral-700 disabled:opacity-30"
-            title="A fighter is not here yet: fight the next two matches first"
-          >
-            ⏭ Later — fighter not here
-          </button>
-          <button
-            disabled={!canSwap}
-            onClick={() => send({ type: 'SWAP_SIDES' })}
-            className="h-11 rounded-xl bg-neutral-800 text-sm font-semibold hover:bg-neutral-700 disabled:opacity-30"
-            title="The fighters stand on the wrong sides"
-          >
-            ⇄ Swap Aka / Shiro
-          </button>
-        </div>
-      )}
+      <div className="mt-3 grid grid-cols-3 gap-3">
+        <button
+          disabled={!encho}
+          onClick={() => confirmEncho(() => send({ type: 'START_ENCHO' }))}
+          className={`h-11 rounded-xl text-sm font-bold disabled:opacity-30 ${enchoArmed ? 'bg-amber-500 text-ink hover:bg-amber-400' : 'bg-neutral-800 hover:bg-neutral-700'}`}
+          title={match.encho ? 'Encho is running' : 'The score is level and the referees call Encho (e.g. the clock was missed): the match continues until the first point'}
+        >
+          {enchoArmed ? 'Confirm Encho?' : 'Encho now'}
+        </button>
+        <button
+          disabled={!canLater}
+          onClick={() => send({ type: 'POSTPONE_MATCH' })}
+          className="h-11 rounded-xl bg-neutral-800 text-sm font-semibold hover:bg-neutral-700 disabled:opacity-30"
+          title="A fighter is not here yet: fight the next two matches first"
+        >
+          ⏭ Later — fighter not here
+        </button>
+        <button
+          disabled={!canSwap}
+          onClick={() => send({ type: 'SWAP_SIDES' })}
+          className="h-11 rounded-xl bg-neutral-800 text-sm font-semibold hover:bg-neutral-700 disabled:opacity-30"
+          title="The fighters stand on the wrong sides"
+        >
+          ⇄ Swap Aka / Shiro
+        </button>
+      </div>
     </section>
   )
 }

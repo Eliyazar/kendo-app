@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { AdminAction } from './ipc'
 import { podium, podiumView, toPublished } from './published'
 import { initialState, reduceApp } from './reducer'
-import { diplomaHtml, diplomas, groupSheetsHtml, pinSlipsHtml, reportHtml, resultsCsv } from './report'
+import { diplomaHtml, diplomas, fightingSpiritDiploma, groupSheetsHtml, pinSlipsHtml, reportHtml, resultsCsv } from './report'
 import type { AppState, Side } from './types'
 
 let clock = 9_000_000
@@ -50,12 +50,26 @@ describe('final standings and documents', () => {
     expect(html).toContain('14 November 2026')
   })
 
-  it('team diplomas go to every member, escaped safely', () => {
+  it('one diploma per team with the team name, escaped safely', () => {
     const t = finishedTournament('team').competition!.categories[0]!
     const ds = diplomas(t)
-    expect(ds).toHaveLength(4 * 3)
-    expect(ds[0]!.team).toMatch(/^Team /)
+    expect(ds).toHaveLength(4)
+    expect(ds[0]!.name).toMatch(/^Team /)
+    expect(ds[0]!.team).toBeUndefined()
     expect(diplomaHtml({ ...ds[0]!, name: '<script>x</script>' })).not.toContain('<script>x')
+  })
+
+  it('Fighting Spirit: a diploma once the name is typed', () => {
+    let s = finishedTournament('individual')
+    const t = s.competition!.categories[0]!
+    expect(fightingSpiritDiploma(t)).toBeNull()
+    const someone = Object.values(t.players)[0]!
+    s = act(s, { type: 'SET_FIGHTING_SPIRIT', categoryId: t.id, name: `  ${someone.name} ` })
+    const d = fightingSpiritDiploma(s.competition!.categories[0]!)!
+    expect(d).toMatchObject({ place: 'spirit', name: someone.name, dojo: someone.dojo })
+    expect(diplomaHtml(d)).toContain('Fighting Spirit')
+    s = act(s, { type: 'SET_FIGHTING_SPIRIT', categoryId: t.id, name: '' })
+    expect(s.competition!.categories[0]!.fightingSpirit).toBeUndefined()
   })
 
   it('report, PIN slips and CSV contain the results', () => {

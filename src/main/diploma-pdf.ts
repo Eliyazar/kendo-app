@@ -25,7 +25,7 @@ const LAYOUT = {
   category: { cx: 0.5107, baseline: 0.656, width: 0.51, size: 24, min: 12 }
 } as const
 
-const PLACE_TEXT: Record<1 | 2 | 3, string> = { 1: '1ST PLACE', 2: '2ND PLACE', 3: '3RD PLACE' }
+const PLACE_TEXT: Record<Diploma['place'], string> = { 1: '1ST PLACE', 2: '2ND PLACE', 3: '3RD PLACE', spirit: 'FIGHTING SPIRIT' }
 const INK = rgb(0.13, 0.13, 0.13)
 
 export const TEMPLATE_FILE = 'diploma-template.pdf'

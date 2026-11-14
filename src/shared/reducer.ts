@@ -110,6 +110,13 @@ export function reduceCategory(t: Tournament, action: CategoryAction, now: numbe
     case 'SHOW_PODIUM':
       return t // competition level
 
+    case 'SET_FIGHTING_SPIRIT': {
+      const name = action.name.replace(/\s+/g, ' ').trim()
+      if (name === (t.fightingSpirit ?? '')) return t
+      const { fightingSpirit: _f, ...rest } = t
+      return name ? { ...rest, fightingSpirit: name } : rest
+    }
+
         case 'POSTPONE_MATCH':
       return postpone(t, requireActive(t, action.courtId))
 

@@ -298,6 +298,8 @@ export interface Tournament {
   homeCourtIds?: Id[]
   /** How the elimination is formed when the pools are locked. Default: auto. */
   bracketPlan?: BracketPlan
+  /** Fighting Spirit award: the name written on its diploma (typed by the table at any time). */
+  fightingSpirit?: string
   /** Fight order. Match ids (individual bouts, incl. team bouts); each court takes its own in this order. */
   matchQueue: Id[]
 

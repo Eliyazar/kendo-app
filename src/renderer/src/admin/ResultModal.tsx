@@ -1,7 +1,7 @@
 // Post-match verification (gogi): nothing is saved until the operator approves.
 
 import type { AdminAction } from '@shared/ipc'
-import { pendingResult, lastUndoableEvent } from '@shared/match-engine'
+import { canStartEncho, pendingResult, lastUndoableEvent } from '@shared/match-engine'
 import type { PublicMatch } from '@shared/public-view'
 import type { Match, MatchEndReason } from '@shared/types'
 import { describeEvent } from './TimerPanel'
@@ -33,16 +33,16 @@ export function ResultModal({ match, view, send }: Props) {
         <h2 className="mt-2 text-xl font-semibold text-white/70">Result</h2>
 
         <div className="mt-3 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-6">
-          <div className={`rounded-2xl bg-aka p-5 text-white ${r.winner === 'aka' ? 'ring-4 ring-amber-300' : ''}`}>
-            <div className="truncate text-2xl font-black">{view.aka.name}</div>
-            <div className="truncate text-sm opacity-75">{view.aka.dojo}</div>
-          </div>
-          <div className="tabular text-6xl font-black whitespace-nowrap">
-            ({r.score.aka.ippons}) – ({r.score.shiro.ippons})
-          </div>
           <div className={`rounded-2xl bg-shiro p-5 text-ink ${r.winner === 'shiro' ? 'ring-4 ring-amber-300' : ''}`}>
             <div className="truncate text-2xl font-black">{view.shiro.name}</div>
             <div className="truncate text-sm opacity-75">{view.shiro.dojo}</div>
+          </div>
+          <div className="tabular text-6xl font-black whitespace-nowrap">
+            ({r.score.shiro.ippons}) – ({r.score.aka.ippons})
+          </div>
+          <div className={`rounded-2xl bg-aka p-5 text-white ${r.winner === 'aka' ? 'ring-4 ring-amber-300' : ''}`}>
+            <div className="truncate text-2xl font-black">{view.aka.name}</div>
+            <div className="truncate text-sm opacity-75">{view.aka.dojo}</div>
           </div>
         </div>
 
@@ -83,6 +83,14 @@ export function ResultModal({ match, view, send }: Props) {
           )}
         </div>
 
+        {!r.needsEncho && canStartEncho(match) && (
+          <button
+            onClick={() => send({ type: 'START_ENCHO' })}
+            className="mx-auto mt-4 block rounded-xl bg-amber-500/15 px-4 py-2 text-base font-bold text-amber-300 hover:bg-amber-500/25"
+          >
+            Draw — fight Encho instead (first point wins)
+          </button>
+        )}
         {match.endReason === 'time-up' && (
           <button
             onClick={() => send({ type: 'TIMER_ADJUST', deltaMs: 1000 })}

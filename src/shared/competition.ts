@@ -178,6 +178,20 @@ export function fightingElsewhere(comp: Competition, courtId: Id, t: Tournament,
   return null
 }
 
+/**
+ * The category on this court is fighting its last pool match and an elimination follows:
+ * the next match is its first elimination match, not yet known (it depends on this result).
+ */
+export function eliminationsNext(comp: Competition, courtId: Id): Tournament | null {
+  const slot = comp.courts.find((c) => c.id === courtId)
+  const category = slot?.categoryId ? categoryById(comp, slot.categoryId) : undefined
+  if (!category || category.phase !== 'pools' || category.bracketPlan?.kind === 'none') return null
+  const current = onCourt(comp, courtId)?.match
+  if (!current || current.status === 'completed' || (current.kind !== 'pool' && current.kind !== 'tie-breaker')) return null
+  const waiting = Object.values(category.matches).some((m) => m.id !== current.id && m.kind !== 'bracket' && m.status !== 'completed')
+  return waiting ? null : category
+}
+
 /** Next match on a court after the current one: this category first, then the next category with work there. */
 export function nextOnCourt(comp: Competition, courtId: Id): { category: Tournament; match: Match } | null {
   const slot = comp.courts.find((c) => c.id === courtId)

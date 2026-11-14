@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { newMatch } from './encounters'
-import { computeScore, reduceMatch, RuleError, timerDisplayMs, type MatchAction } from './match-engine'
+import { canStartEncho, computeScore, reduceMatch, RuleError, timerDisplayMs, type MatchAction } from './match-engine'
 import type { Match, MatchConfig } from './types'
 
 const POOL: MatchConfig = { durationMs: 180_000, ipponsToWin: 2, enchoOnDraw: false }
@@ -165,6 +165,25 @@ describe('encho', () => {
     m = reduceMatch(m, { type: 'UNDO' }, 126_000)
     expect(m.status).toBe('in-progress')
     expect(m.events).toHaveLength(1)
+  })
+
+  it('Encho can be started by hand at any time while the score is level', () => {
+    let { m } = run(newMatch('x', 'pool', 'a', 'b', POOL), [
+      [{ type: 'TIMER_START' }, 0],
+      [{ type: 'ADD_IPPON', side: 'aka', technique: 'M' }, 10_000]
+    ])
+    expect(canStartEncho(m)).toBe(false)
+    expect(() => reduceMatch(m, { type: 'START_ENCHO' }, 20_000)).toThrow(/level/)
+    m = reduceMatch(m, { type: 'ADD_IPPON', side: 'shiro', technique: 'K' }, 30_000)
+    // The clock still runs (the regular time was missed): Encho starts anyway.
+    m = reduceMatch(m, { type: 'START_ENCHO' }, 40_000)
+    expect(m).toMatchObject({ encho: true, status: 'in-progress' })
+    expect(m.timer).toMatchObject({ mode: 'stopwatch', runningSince: null })
+    expect(() => reduceMatch(m, { type: 'START_ENCHO' }, 41_000)).toThrow(/already/)
+    m = reduceMatch(m, { type: 'ADD_IPPON', side: 'shiro', technique: 'D' }, 50_000)
+    expect(m.endReason).toBe('encho-ippon')
+    m = reduceMatch(m, { type: 'APPROVE_MATCH' }, 51_000)
+    expect(m.result).toMatchObject({ winner: 'shiro', decision: 'encho' })
   })
 
   it('draw in a pool match is hikiwake', () => {

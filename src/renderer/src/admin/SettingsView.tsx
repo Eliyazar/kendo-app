@@ -1,7 +1,8 @@
 // Stream overlay, courts (host / court laptop), online results and export.
 
 import { useEffect, useState, type ReactNode } from 'react'
-import type { AdminSnapshot, AppSettings } from '@shared/ipc'
+import type { AdminAction, AdminSnapshot, AppSettings } from '@shared/ipc'
+import { FightingSpiritList } from './FightingSpirit'
 import { Qr } from '../components/Qr'
 import { useConfirm } from './useAdmin'
 
@@ -57,7 +58,7 @@ function SettingInput({ value, onSave, placeholder, type = 'text' }: { value: st
   return <input className={box} type={type} value={v} placeholder={placeholder} onChange={(e) => setV(e.target.value)} onBlur={() => v !== value && onSave(v)} />
 }
 
-export function SettingsView({ snap, save }: { snap: AdminSnapshot; save: Save }) {
+export function SettingsView({ snap, save, send }: { snap: AdminSnapshot; save: Save; send: (a: AdminAction) => Promise<boolean> }) {
   const s: AppSettings = snap.settings
   const t = snap.state.competition
   const client = s.court.role === 'client'
@@ -253,6 +254,15 @@ export function SettingsView({ snap, save }: { snap: AdminSnapshot; save: Save }
         </Card>
       )}
 
+      {t && (
+        <Card
+          title="Fighting Spirit diplomas"
+          hint="One award per category. Type (or pick) the name at any time and press Generate: fighting-spirit.pdf is saved in the category's folder, on your diploma design. It is also saved with the results."
+        >
+          <FightingSpiritList comp={t} send={send} />
+        </Card>
+      )}
+
       <Card
         title="Results & diplomas"
         hint="Saves results.pdf, results.csv, diplomas for 1st, 2nd and both 3rd places (and captain PIN slips in team mode) to Documents › Kendo Tournament Manager. Happens automatically when the final is approved."
@@ -286,7 +296,7 @@ export function SettingsView({ snap, save }: { snap: AdminSnapshot; save: Save }
           <p className="mt-1 text-sm text-muted">
             {snap.diploma.template ? (
               <>
-                <span className="text-ok">✓ Your PDF design</span> — name (with the team in brackets), place and category are written on its three lines. One <code>diplomas.pdf</code> per category.
+                <span className="text-ok">✓ Your PDF design</span> — name (the team name in team categories: one diploma per team), place and category are written on its three lines. One <code>diplomas.pdf</code> per category.
               </>
             ) : (
               'Standard design. Choose your PDF to use it instead.'

@@ -315,7 +315,7 @@ export function AdminApp() {
       )}
 
       {tab === 'settings' && snap ? (
-        <SettingsView snap={snap} save={saveSettings} />
+        <SettingsView snap={snap} save={saveSettings} send={send} />
       ) : !comp || !t ? (
         client ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-line text-muted">
@@ -375,8 +375,9 @@ export function AdminApp() {
 
             {match && pm && (
               <div className="flex min-h-0 flex-1 gap-4">
-                <ScoringPanel side="aka" competitor={pm.aka} scoring={scoring} canFusen={canFusen} canKiken={canKiken} send={fire} onEdit={match?.aka.playerId ? () => setEditPerson(match.aka.playerId) : undefined} />
+                {/* Shiro left, Aka right: as the court is seen from the table and on the TV. */}
                 <ScoringPanel side="shiro" competitor={pm.shiro} scoring={scoring} canFusen={canFusen} canKiken={canKiken} send={fire} onEdit={match?.shiro.playerId ? () => setEditPerson(match.shiro.playerId) : undefined} />
+                <ScoringPanel side="aka" competitor={pm.aka} scoring={scoring} canFusen={canFusen} canKiken={canKiken} send={fire} onEdit={match?.aka.playerId ? () => setEditPerson(match.aka.playerId) : undefined} />
               </div>
             )}
           </div>

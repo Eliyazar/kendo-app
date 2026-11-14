@@ -77,13 +77,24 @@ function scheduleNode(t: Tournament, node: BracketNode): Tournament {
   if (isWithdrawn(t, node.shiroEntrantId)) return advance(t, node.id, node.akaEntrantId)
   const s = createMeeting(t, 'bracket', node.akaEntrantId, node.shiroEntrantId, { bracketNodeId: node.id, courtId: courtForNode(t, node) })
   const bracket = t.bracket!
-  return enqueue(
-    {
-      ...s.t,
-      bracket: { ...bracket, nodes: { ...bracket.nodes, [node.id]: { ...node, matchId: s.meetingId } } }
-    },
-    s.boutIds
-  )
+  const withNode: Tournament = { ...s.t, bracket: { ...bracket, nodes: { ...bracket.nodes, [node.id]: { ...node, matchId: s.meetingId } } } }
+  // Round order: two seeded fighters (byes) who meet in round two wait until every
+  // first-round match is fought, so the meeting goes before any later-round meeting.
+  const later = withNode.matchQueue.findIndex((id) => (roundOfQueued(withNode, id) ?? -1) > node.round)
+  if (later < 0) return enqueue(withNode, s.boutIds)
+  const queue = [...withNode.matchQueue]
+  queue.splice(later, 0, ...s.boutIds)
+  return { ...withNode, matchQueue: queue }
+}
+
+/** Bracket round of a queued match that has not started (null for anything else). */
+function roundOfQueued(t: Tournament, id: Id): number | null {
+  const m = t.matches[id]
+  if (!m || m.kind !== 'bracket' || m.status !== 'scheduled') return null
+  const tm = m.teamMatchId ? t.teamMatches[m.teamMatchId] : undefined
+  if (tm ? !encounterOpen(t, tm) : m.events.length > 0 || m.timer.elapsedMs > 0 || m.timer.runningSince !== null) return null
+  const nodeId = m.bracketNodeId ?? tm?.bracketNodeId
+  return nodeId ? (t.bracket?.nodes[nodeId]?.round ?? null) : null
 }
 
 /** Record a node's winner, move them to the next round, and schedule it if ready. */

@@ -300,6 +300,35 @@ describe('bracket written slot by slot', () => {
     expect(r1.filter((n) => n.matchId)).toHaveLength(2)
     expect(r1.filter((n) => n.winnerEntrantId && !n.matchId)).toHaveLength(2)
   })
+
+  it('seeded fighters who meet in round two wait until every first-round match is fought', () => {
+    const entrants = Array.from({ length: 9 }, (_, i) => ({ name: `P${i}`, dojo: '' }))
+    const pools = ['A', 'B', 'C'].map((l, k) => ({ name: `Pool ${l}`, entrants: entrants.slice(k * 3, k * 3 + 3).map((e) => e.name), matches: [] as [string, string][] }))
+    for (const p of pools) p.matches = [[p.entrants[0]!, p.entrants[1]!], [p.entrants[1]!, p.entrants[2]!], [p.entrants[0]!, p.entrants[2]!]]
+    let s = create({
+      name: 'Cup',
+      date: '2026-11-07',
+      courts: 1,
+      // A1 and C1 both have a bye and meet in round two; B2–C2 is the only first-round match.
+      categories: [category('Men', { entrants, predrawn: { pools, bracket: [['A1', 'BYE'], ['C1', 'BYE'], ['B1', 'BYE'], ['B2', 'C2']] } }), category('Kids', { entrants: people('K', 3) })]
+    })
+    const A = court(s, 0)
+    for (let i = 0; i < 8; i++) s = win(s, A)
+    // Last pool match on the court: the TV announces this category's eliminations, not the next category.
+    expect(toPublicView(s, A)).toMatchObject({ nextMatch: null, nextNote: 'Eliminations · Men' })
+    s = win(s, A)
+    s = act(s, { type: 'LOCK_POOLS', categoryId: cat(s, 0).id })
+    const t = cat(s, 0)
+    const rounds = t.matchQueue.map((id) => t.matches[id]!).filter((m) => m.kind === 'bracket').map((m) => t.bracket!.nodes[m.bracketNodeId!]!.round)
+    expect(rounds).toEqual([0, 1])
+    expect(onCourt(comp(s), A)?.match?.kind).toBe('bracket')
+    expect(t.bracket!.nodes[onCourt(comp(s), A)!.match!.bracketNodeId!]!.round).toBe(0)
+    // The winner's round-two match also goes before the later rounds.
+    s = win(s, A)
+    const t2 = cat(s, 0)
+    const left = t2.matchQueue.map((id) => t2.matches[id]!).filter((m) => m.kind === 'bracket' && m.status === 'scheduled').map((m) => t2.bracket!.nodes[m.bracketNodeId!]!.round)
+    expect(left).toEqual([1, 1])
+  })
 })
 
 describe('suggested bracket', () => {

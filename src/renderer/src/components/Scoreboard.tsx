@@ -1,16 +1,12 @@
 // The hall scoreboard, drawn on a fixed 1920×1080 canvas (see ScaledStage).
 // Read-only and deliberately clock-free: it never shows the remaining time.
-// Dark broadcast style: red and white mark the sides, not whole halves.
+// Dark broadcast style: red and white mark the sides, not whole halves. Shiro left, Aka right.
 
-import { useEffect, useState } from 'react'
-import type { Person, PodiumView, PublicCompetitor, PublicMatch, PublicView } from '@shared/public-view'
+import type { Person, PodiumView, PublicCompetitor, PublicView } from '@shared/public-view'
 import { countryName } from '@shared/countries'
 import { FitText } from './FitText'
 import { Qr } from './Qr'
 import { CountryChip, HansokuIcon, MarkBadge, MarkSlot } from './Marks'
-
-const TIME_UP_FLASH_MS = 4000
-
 
 function Half({ side, c }: { side: 'aka' | 'shiro'; c: PublicCompetitor }) {
   const aka = side === 'aka'
@@ -58,28 +54,13 @@ function TeamBand({ view }: { view: PublicView }) {
   )
   return (
     <div className="flex h-[108px] items-center justify-center gap-10 border-b border-line bg-surface">
-      <span className="display max-w-[600px] truncate text-right text-[54px] font-bold">{t.akaTeam}</span>
-      {pill(t.akaWins, t.akaIppons, true)}
-      <span className="text-[40px] text-muted">:</span>
+      <span className="display max-w-[600px] truncate text-right text-[54px] font-bold">{t.shiroTeam}</span>
       {pill(t.shiroWins, t.shiroIppons, false)}
-      <span className="display max-w-[600px] truncate text-[54px] font-bold">{t.shiroTeam}</span>
+      <span className="text-[40px] text-muted">:</span>
+      {pill(t.akaWins, t.akaIppons, true)}
+      <span className="display max-w-[600px] truncate text-[54px] font-bold">{t.akaTeam}</span>
     </div>
   )
-}
-
-function useTimeUpFlash(match: PublicMatch | null): boolean {
-  const [flash, setFlash] = useState(false)
-  const key = match?.timeUp ? match.id : null
-  useEffect(() => {
-    if (!key) {
-      setFlash(false)
-      return
-    }
-    setFlash(true)
-    const id = setTimeout(() => setFlash(false), TIME_UP_FLASH_MS)
-    return () => clearTimeout(id)
-  }, [key])
-  return flash
 }
 
 const who = (p: Person) => (
@@ -141,7 +122,6 @@ export function Scoreboard({ view }: { view: PublicView | null }) {
 
 function Board({ view }: { view: PublicView | null }) {
   const m = view?.match ?? null
-  const flash = useTimeUpFlash(m)
 
   return (
     <div className="relative flex h-full w-full flex-col bg-ink text-white">
@@ -152,7 +132,6 @@ function Board({ view }: { view: PublicView | null }) {
         <div className="display text-[56px] font-bold tracking-wide">{m ? [m.label, m.positionLabel].filter(Boolean).join(' · ') : ''}</div>
         <div className="flex items-center justify-end gap-5">
           {m?.encho && <span className="display rounded-lg bg-hansoku px-6 py-0.5 text-[46px] font-bold text-ink">Encho</span>}
-          {m?.timeUp && !flash && <span className="display animate-pulse rounded-lg bg-hansoku px-6 py-0.5 text-[46px] font-bold text-ink">Time up</span>}
           {view?.multiCourt && <span className="display text-[40px] font-semibold tracking-wider text-muted">{view.courtName}</span>}
         </div>
       </header>
@@ -161,8 +140,8 @@ function Board({ view }: { view: PublicView | null }) {
 
       {m ? (
         <main className="relative grid flex-1 grid-cols-2">
-          <Half side="aka" c={m.aka} />
           <Half side="shiro" c={m.shiro} />
+          <Half side="aka" c={m.aka} />
           <div className="absolute top-[14px] bottom-12 left-1/2 w-px bg-line" />
         </main>
       ) : (
@@ -199,12 +178,14 @@ function Board({ view }: { view: PublicView | null }) {
         <span className="flex min-w-0 items-center truncate">
           {view?.nextMatch ? (
             <>
-              <span className="mr-4 inline-block h-6 w-6 shrink-0 rounded-full bg-aka" />
-              {who(view.nextMatch.aka)}
-              <span className="mx-8 text-muted">vs</span>
               <span className="mr-4 inline-block h-6 w-6 shrink-0 rounded-full bg-shiro" />
               {who(view.nextMatch.shiro)}
+              <span className="mx-8 text-muted">vs</span>
+              <span className="mr-4 inline-block h-6 w-6 shrink-0 rounded-full bg-aka" />
+              {who(view.nextMatch.aka)}
             </>
+          ) : view?.nextNote ? (
+            <span className="font-semibold text-white">{view.nextNote}</span>
           ) : (
             <span className="text-muted">—</span>
           )}
@@ -221,11 +202,6 @@ function Board({ view }: { view: PublicView | null }) {
         )}
       </footer>
 
-      {flash && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/70">
-          <div className="display animate-flash rounded-[40px] bg-hansoku px-28 py-6 text-[300px] leading-none font-bold text-ink">Time up</div>
-        </div>
-      )}
     </div>
   )
 }

@@ -12,7 +12,7 @@ import type { Competition, Id, Match, Tournament } from './types'
 
 const esc = (s: string): string => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!)
 
-const PLACE = { 1: '1st place', 2: '2nd place', 3: '3rd place' } as const
+const PLACE = { 1: '1st place', 2: '2nd place', 3: '3rd place', spirit: 'Fighting Spirit' } as const
 const DECISION: Record<string, string> = { ippon: '', time: '', encho: 'Encho', 'fusen-gachi': 'Fusen-gachi', kiken: 'Kiken', hikiwake: 'Hikiwake' }
 
 const marks = (m: Match, side: 'aka' | 'shiro'): string =>
@@ -23,7 +23,8 @@ const marks = (m: Match, side: 'aka' | 'shiro'): string =>
 // ---------------------------------------------------------------------------
 
 export interface Diploma {
-  place: 1 | 2 | 3
+  /** 1st, 2nd, 3rd place, or the Fighting Spirit award. */
+  place: 1 | 2 | 3 | 'spirit'
   name: string
   /** IOC code */
   country: string
@@ -37,20 +38,32 @@ export interface Diploma {
   date: string
 }
 
-/** One diploma per medallist; in team mode one per team member. */
+/** One diploma per medallist; in team mode one per team (the team name on it). */
 export function diplomas(t: Tournament, competitionName: string = t.name): Diploma[] {
   const out: Diploma[] = []
   for (const { place, entrantId } of podium(t)) {
     const team = t.mode === 'team' ? t.teams[entrantId] : undefined
-    const people = team ? team.members.map((id) => t.players[id]!).filter(Boolean) : [t.players[entrantId]!].filter(Boolean)
-    for (const p of people) {
-      const d: Diploma = { place, name: p.name, country: p.country ?? team?.country ?? '', dojo: p.dojo, tournament: competitionName, date: t.date }
-      if (t.name !== competitionName) d.category = t.name
-      if (team) d.team = team.name
-      out.push(d)
-    }
+    const p = team ? undefined : t.players[entrantId]
+    const d: Diploma | null = team
+      ? { place, name: team.name, country: team.country ?? '', dojo: team.dojo, tournament: competitionName, date: t.date }
+      : p
+        ? { place, name: p.name, country: p.country ?? '', dojo: p.dojo, tournament: competitionName, date: t.date }
+        : null
+    if (!d) continue
+    if (t.name !== competitionName) d.category = t.name
+    out.push(d)
   }
   return out
+}
+
+/** The Fighting Spirit diploma of a category, once the table has typed the name. */
+export function fightingSpiritDiploma(t: Tournament, competitionName: string = t.name): Diploma | null {
+  const name = t.fightingSpirit?.trim()
+  if (!name) return null
+  const p = Object.values(t.players).find((x) => x.name.trim().toLowerCase() === name.toLowerCase())
+  const d: Diploma = { place: 'spirit', name, country: p?.country ?? '', dojo: p?.dojo ?? '', tournament: competitionName, date: t.date }
+  if (t.name !== competitionName) d.category = t.name
+  return d
 }
 
 const longDate = (iso: string): string => {

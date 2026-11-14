@@ -103,9 +103,9 @@ export function ScoringPanel({ side, competitor: c, scoring, canFusen, canKiken 
           className={`h-16 rounded-xl text-base font-bold transition disabled:opacity-25 ${
             fusenArmed ? 'bg-red-600 hover:bg-red-500' : 'bg-neutral-700 hover:bg-neutral-600'
           }`}
-          title={`Opponent absent: award ${aka ? 'Aka' : 'Shiro'} a default win (2 ippons)`}
+          title={`Opponent absent (before the match starts): ${aka ? 'Aka' : 'Shiro'} wins with two circles ○○ (2 ippons)`}
         >
-          {fusenArmed ? 'Confirm fusen-gachi?' : 'Fusen-gachi'}
+          {fusenArmed ? 'Confirm fusen-gachi ○○?' : 'Fusen-gachi ○○ · opponent absent'}
         </button>
         )}
       </div>

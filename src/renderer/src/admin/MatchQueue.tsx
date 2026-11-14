@@ -186,6 +186,9 @@ export function MatchQueue({
                     </li>
                   )
                 })}
+                {t.phase === 'pools' && t.bracketPlan?.kind !== 'none' && (
+                  <li className="border-b border-line px-4 py-2 text-xs text-muted italic">Eliminations of {t.name} — they start as soon as the pools end</li>
+                )}
               </ol>
             </li>
           )

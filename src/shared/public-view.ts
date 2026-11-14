@@ -2,7 +2,7 @@
 // Deliberately contains NO clock information (anti-stalling rule):
 // the public screen only learns that time is up, never how much is left.
 
-import { nextOnCourt, onCourt } from './competition'
+import { eliminationsNext, nextOnCourt, onCourt } from './competition'
 import { computeStandings } from './standings'
 import { tallyEncounter } from './encounters'
 import { computeScore, pendingResult, type ScoreMark } from './match-engine'
@@ -72,6 +72,8 @@ export interface PublicView {
   match: PublicMatch | null
   team: PublicTeamScore | null
   nextMatch: PublicMatchup | null
+  /** Shown as "Next" when the pairing is not known yet, e.g. "Eliminations · Men individual". */
+  nextNote?: string | null
   /** Set once the bracket final is decided and the board is empty. */
   champion: Person | null
 }
@@ -173,11 +175,14 @@ export function toPublicView(state: AppState, courtId?: string): PublicView {
   const slot = comp.courts.find((c) => c.id === courtId) ?? comp.courts[0]!
   const base = { tournamentName: comp.name, courtName: slot.name, multiCourt: comp.courts.length > 1, multiCategory: comp.categories.length > 1 }
   const on = onCourt(comp, slot.id)
-  const next = nextOnCourt(comp, slot.id)
+  // During the last pool match the elimination of the same category is next, not the next category.
+  const elim = eliminationsNext(comp, slot.id)
+  const next = elim ? null : nextOnCourt(comp, slot.id)
   const nextMatch = next ? { aka: describeCompetitor(next.category, next.match.aka), shiro: describeCompetitor(next.category, next.match.shiro) } : null
+  const nextNote = elim ? `Eliminations · ${elim.name}` : null
   if (!on?.match) {
     const done = next ? null : lastChampionOn(comp, slot.id)
-    return { ...base, categoryName: done?.category.name ?? on?.category.name ?? null, match: null, team: null, nextMatch, champion: done?.champion ?? null }
+    return { ...base, categoryName: done?.category.name ?? on?.category.name ?? null, match: null, team: null, nextMatch, nextNote, champion: done?.champion ?? null }
   }
-  return { ...base, categoryName: on.category.name, champion: null, match: matchView(on.category, on.match), team: teamScore(on.category, on.match), nextMatch }
+  return { ...base, categoryName: on.category.name, champion: null, match: matchView(on.category, on.match), team: teamScore(on.category, on.match), nextMatch, nextNote }
 }

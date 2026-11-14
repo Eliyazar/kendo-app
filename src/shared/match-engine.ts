@@ -199,6 +199,13 @@ export function kiken(m: Match, winner: Side, now: number): Match {
 // Reducer
 // ---------------------------------------------------------------------------
 
+/** Encho can start: the match is not over, not in Encho yet, not a fusen-gachi, and the score is level. */
+export function canStartEncho(m: Match): boolean {
+  if (m.status === 'completed' || m.encho) return false
+  const s = computeScore(m.events)
+  return !s.fusenGachi && s.aka.ippons === s.shiro.ippons
+}
+
 /** The event UNDO would remove. Events from before Encho started are locked. */
 export function lastUndoableEvent(m: Match): PointEvent | undefined {
   if (m.encho && m.events.length <= (m.enchoFromEvent ?? 0)) return undefined
@@ -314,9 +321,10 @@ export function reduceMatch(m: Match, action: MatchAction, now: number): Match {
     }
 
     case 'START_ENCHO': {
-      const r = pendingResult(m)
-      if (m.status !== 'awaiting-confirmation' || !r.needsEncho) {
-        throw new RuleError('Encho is only available after a drawn elimination match.')
+      // After a drawn elimination match, or at any moment by hand while the score is level
+      // (the clock was missed, or a pool match the referees decide to settle in Encho).
+      if (!canStartEncho(m)) {
+        throw new RuleError(m.encho ? 'Encho has already started.' : 'Encho needs a level score.')
       }
       const { endReason: _dropped, ...rest } = m
       return {

@@ -29,6 +29,7 @@ export const IPC = {
   adminDiplomaFile: 'admin:diploma-file',
   /** invoke, admin -> main: write diploma-test.pdf with sample names. */
   adminDiplomaTest: 'admin:diploma-test',
+  adminFightingSpirit: 'admin:fighting-spirit',
   /** invoke, admin -> main: save group-sheets.pdf. */
   adminExportSheets: 'admin:export-sheets',
   /** invoke, admin -> main: write a backup now. */
@@ -116,6 +117,8 @@ export type AdminAction =
   | { type: 'REMOVE_MATCH'; matchId: string }
   /** Fight an approved match again: its result is cleared and it is next on its court. */
   | { type: 'REPLAY_MATCH'; matchId: string }
+  /** Fighting Spirit award of a category: the name for its diploma (empty clears it). */
+  | { type: 'SET_FIGHTING_SPIRIT'; categoryId: string; name: string }
   /** Move a waiting match one place earlier or later on its court. */
   | { type: 'MOVE_IN_QUEUE'; matchId: string; direction: 'up' | 'down' }
   | { type: 'DEV_LOAD_DEMO' }
@@ -147,6 +150,7 @@ export const ADMIN_ACTION_TYPES: readonly AdminActionType[] = [
   'SET_POOL_REVIEW',
   'RESTART_COMPETITION',
   'MOVE_CATEGORY',
+  'SET_FIGHTING_SPIRIT',
   'GENERATE_TIE_BREAKER',
   'LOCK_POOLS',
   'ADD_ENTRANT',
@@ -269,6 +273,8 @@ export interface AdminBridge {
   exportPoster(): Promise<ExportResult>
   chooseDiplomaFile(kind: 'template' | 'font'): Promise<DispatchResult | null>
   diplomaTest(): Promise<ExportResult>
+  /** <category>/fighting-spirit.pdf with the name typed for that category. */
+  fightingSpirit(categoryId: string): Promise<ExportResult>
   exportGroupSheets(): Promise<ExportResult>
   backupNow(): Promise<ExportResult>
   restoreBackup(): Promise<DispatchResult | null>
