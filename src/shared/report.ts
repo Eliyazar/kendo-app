@@ -248,9 +248,16 @@ export function resultsCsv(t: Tournament): string {
 }
 
 /** A4 poster for the entrance and the walls: QR code, link and tournament code of the online results. */
-export function posterHtml(competitionName: string, date: string, url: string, qrSvg: string): string {
+export function posterHtml(competitionName: string, date: string, url: string, qrSvg: string, teams = false): string {
   const code = url.split('/t/')[1] ?? ''
   const site = url.split('/t/')[0] ?? url
+  // With team categories the same page is also where captains send their team order.
+  const uses = teams
+    ? `<div class="uses">
+<div class="use"><div class="n">1</div><div><b>Live results</b> — every match, pools, brackets and final places.<div class="b">Резултати на живо — всички мачове, групи, схеми и класиране.</div></div></div>
+<div class="use"><div class="n">2</div><div><b>Team captains</b> — open the <b>Captain</b> tab, choose your team, enter your team PIN and send your fighting order before each team match.<div class="b">Капитани на отбори — таб <b>Captain</b>, изберете отбора си, въведете PIN кода на отбора и изпратете подредбата преди всяка отборна среща.</div></div></div>
+</div>`
+    : ''
   return `<!doctype html><html><head><meta charset="utf-8"><style>
 @page { size: A4; margin: 0 } html, body { margin: 0 } body { font-family: 'Segoe UI', Arial, sans-serif; color: #0b0d12 }
 .page { height: 297mm; box-sizing: border-box; padding: 18mm 16mm; display: flex; flex-direction: column; align-items: center; text-align: center }
@@ -260,14 +267,47 @@ h1 { font-size: 26pt; margin: 4mm 0 1mm } .date { font-size: 13pt; color: #555 }
 .qr { width: 120mm; height: 120mm; margin: 10mm 0 } .qr svg { width: 100%; height: 100% }
 .how { font-size: 15pt } .url { font-size: 13pt; margin-top: 6mm; word-break: break-all; color: #333 }
 .code { margin-top: 4mm; font-size: 15pt } .code b { font-size: 26pt; letter-spacing: 0.15em; font-family: Consolas, monospace }
-</style></head><body><div class="page">
+.teams { padding: 12mm 14mm } .teams h1 { font-size: 22pt; margin-top: 2mm } .teams .big { font-size: 38pt; margin-top: 5mm } .teams .bg { font-size: 18pt } .teams .qr { width: 80mm; height: 80mm; margin: 5mm 0 } .teams .url { margin-top: 3mm } .teams .code { margin-top: 2mm }
+.uses { margin-top: 6mm; text-align: left; width: 100%; display: flex; flex-direction: column; gap: 3mm }
+.use { display: flex; gap: 4mm; align-items: flex-start; font-size: 12.5pt; border: 0.4mm solid #ddd; border-radius: 3mm; padding: 2.5mm 4mm }
+.use .n { flex: none; width: 9mm; height: 9mm; border-radius: 50%; background: #9e1626; color: #fff; font-weight: 800; display: flex; align-items: center; justify-content: center }
+.use .b { color: #555; font-size: 11.5pt; margin-top: 1mm }
+</style></head><body><div class="page${teams ? ' teams' : ''}">
 <div class="top">Kendo</div><h1>${esc(competitionName)}</h1><div class="date">${esc(longDate(date))}</div>
 <div class="big">LIVE RESULTS</div><div class="bg">Резултати на живо</div>
 <div class="qr">${qrSvg}</div>
 <div class="how">Scan with your phone camera · Сканирайте с камерата на телефона</div>
 <div class="url">${esc(site)}</div>
 <div class="code">Tournament code · Код на турнира: <b>${esc(code)}</b></div>
+${uses}
 </div></body></html>`
+}
+
+/** One page for the table: every team of every team category with its captain PIN (a PIN is valid for the whole tournament). */
+export function teamPinsHtml(comp: Competition, onlineUrl: string | null): string {
+  const cats = comp.categories.filter((t) => t.mode === 'team')
+  const tables = cats
+    .map((t) => {
+      const rows = Object.values(t.teams)
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map((team) => `<tr><td><b>${esc(team.name)}</b></td><td>${esc(team.country ? (countryName(team.country) ?? team.country) : '')}</td><td class="pin">${esc(team.pin)}</td></tr>`)
+        .join('')
+      return `<h2>${esc(t.name)}</h2><table><thead><tr><th>Team</th><th>Country</th><th>PIN</th></tr></thead><tbody>${rows}</tbody></table>`
+    })
+    .join('')
+  return `<!doctype html><html><head><meta charset="utf-8"><style>
+@page { size: A4; margin: 14mm } body { font-family: 'Segoe UI', Arial, sans-serif; color: #0b0d12 }
+h1 { font-size: 18pt; margin: 0 } .sub { color: #555; margin: 1mm 0 6mm; font-size: 11pt }
+h2 { font-size: 14pt; color: #9e1626; margin: 5mm 0 1.5mm; text-transform: uppercase; letter-spacing: 0.08em }
+table { width: 100%; border-collapse: collapse; font-size: 12pt } th, td { border-bottom: 0.3mm solid #ccc; padding: 1.6mm 2mm; text-align: left }
+th { font-size: 9pt; text-transform: uppercase; color: #666 } td.pin { font-family: Consolas, monospace; font-size: 17pt; font-weight: bold; letter-spacing: 0.2em; width: 40mm }
+.how { margin-top: 6mm; font-size: 10.5pt; color: #333; border-top: 0.3mm solid #ccc; padding-top: 3mm }
+</style></head><body>
+<h1>${esc(comp.name)} · Team PINs</h1>
+<div class="sub">For the table only — give each captain their own PIN. One PIN per team for the whole tournament. · Само за масата — дайте на всеки капитан неговия PIN. Един PIN на отбор за целия турнир.</div>
+${tables}
+<div class="how">${onlineUrl ? `Captains: <b>${esc(onlineUrl)}</b> → <b>Captain</b> → team → PIN → send the order before each team match (it locks when the first bout starts).<br>Капитани: таб <b>Captain</b> → отбор → PIN → изпратете подредбата преди всяка среща (заключва се, щом започне първият двубой).` : 'Turn on online results so captains can send their order from the phone.'}</div>
+</body></html>`
 }
 
 /** Group sheets for the wall and the table: every pool with its entrants and fight order, results left blank. */

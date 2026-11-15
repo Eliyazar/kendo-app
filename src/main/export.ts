@@ -11,7 +11,7 @@ import { app, BrowserWindow } from 'electron'
 import type { ExportResult } from '@shared/ipc'
 import QRCode from 'qrcode'
 import { diplomasOnTemplate, hasTemplate } from './diploma-pdf'
-import { diplomaHtml, diplomas, fightingSpiritDiploma, groupSheetsHtml, pinSlipsHtml, posterHtml, reportHtml, resultsCsv } from '@shared/report'
+import { diplomaHtml, diplomas, fightingSpiritDiploma, groupSheetsHtml, pinSlipsHtml, posterHtml, reportHtml, resultsCsv, teamPinsHtml } from '@shared/report'
 import type { AppState, Id, Tournament } from '@shared/types'
 
 const safe = (s: string): string => s.replace(/[<>:"/\\|?*\x00-\x1f]+/g, '_').trim().slice(0, 60).replace(/[\s.]+$/, '') || 'competition' // Windows: no trailing space or dot
@@ -89,7 +89,7 @@ export function competitionFolder(state: AppState): string {
   return path.join(documentsBase(), safe(`${state.competition!.date} ${state.competition!.name}`))
 }
 
-/** live-results-poster.pdf in the competition folder. */
+/** live-results-poster.pdf in the competition folder; with team categories also team-pins.pdf (every team's captain PIN). */
 export async function exportPoster(state: AppState, onlineUrl: string | null): Promise<ExportResult> {
   const comp = state.competition
   if (!comp) return { ok: false, error: 'No competition loaded.' }
@@ -99,8 +99,10 @@ export async function exportPoster(state: AppState, onlineUrl: string | null): P
   try {
     await fs.mkdir(folder, { recursive: true })
     const qr = await QRCode.toString(onlineUrl, { type: 'svg', margin: 1, errorCorrectionLevel: 'M' })
-    await save(path.join(folder, 'live-results-poster.pdf'), await htmlToPdf(win, posterHtml(comp.name, comp.date, onlineUrl, qr), false))
-    return { ok: true, folder, files: 1 }
+    const teams = comp.categories.some((t) => t.mode === 'team')
+    await save(path.join(folder, 'live-results-poster.pdf'), await htmlToPdf(win, posterHtml(comp.name, comp.date, onlineUrl, qr, teams), false))
+    if (teams) await save(path.join(folder, 'team-pins.pdf'), await htmlToPdf(win, teamPinsHtml(comp, onlineUrl), false))
+    return { ok: true, folder, files: teams ? 2 : 1 }
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) }
   } finally {

@@ -50,13 +50,11 @@ export function MarkSlot({ size }: { size: number }) {
   return <div className="rounded-full" style={{ width: size, height: size, border: `${Math.max(2, Math.round(size * 0.035))}px solid rgb(255 255 255 / 0.09)` }} />
 }
 
-/** Amber warning triangle for one hansoku. */
+/** Plain yellow triangle for one hansoku. */
 export function HansokuIcon({ size, outline = INK }: { size: number; outline?: string }) {
   return (
     <svg width={size} height={size} viewBox="0 0 100 100" className="animate-pop" aria-label="Hansoku">
       <polygon points="50,6 96,92 4,92" fill="#f6c445" stroke={outline} strokeWidth="6" strokeLinejoin="round" />
-      <rect x="45" y="34" width="10" height="32" rx="3" fill={outline} />
-      <circle cx="50" cy="78" r="6" fill={outline} />
     </svg>
   )
 }

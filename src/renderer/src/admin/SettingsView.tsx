@@ -210,7 +210,7 @@ export function SettingsView({ snap, save, send }: { snap: AdminSnapshot; save: 
                   }}
                   className="mt-3 rounded-lg bg-surface-2 px-4 py-2 text-sm font-bold hover:bg-neutral-700"
                 >
-                  Poster with QR code (PDF)…
+                  {t?.categories.some((c) => c.mode === 'team') ? 'Poster with QR code + team PINs (PDF)…' : 'Poster with QR code (PDF)…'}
                 </button>
                 {posterError && <p className="mt-1 text-sm text-red-400">{posterError}</p>}
               </div>
